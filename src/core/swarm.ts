@@ -13,6 +13,8 @@ import { mergeChunk } from '../utils/merge';
 
 const CTX_VARS_NAME = 'contextVariables';
 
+const DEBUG = process.env.DEBUG === 'true';
+
 interface SafeFunctionDefinition extends FunctionDefinition {
   parameters: FunctionParameters & {
     properties: Record<string, unknown>;
@@ -96,29 +98,27 @@ export class Swarm {
   }
 
   private handleFunctionResult(result: any, debug: boolean): Result {
-    if ('value' in result && 'agent' in result && 'contextVariables' in result) {
-      return result as Result;
+    // First check if it's already a Result object
+    if (result && typeof result === 'object' && 'value' in result && 'agent' in result && 'contextVariables' in result) {
+        return result as Result;
     }
 
-    if ('name' in result && 'model' in result) {
-      return {
-        value: JSON.stringify({ assistant: result.name }),
-        agent: result as Agent,
-        contextVariables: {}
-      };
+    // Check if it's an Agent object
+    debugPrint(debug, 'Result:', result);
+    if (result && typeof result === 'object' && 'name' in result && 'model' in result) {
+        return {
+            value: JSON.stringify({ assistant: result.name }),
+            agent: result as Agent,
+            contextVariables: {}
+        };
     }
 
-    try {
-      return {
+    // Handle primitive return types (string, number, etc.)
+    return {
         value: String(result),
         agent: null,
         contextVariables: {}
-      };
-    } catch (e) {
-      const errorMessage = `Failed to cast response to string: ${result}. Make sure agent functions return a string or Result object. Error: ${e}`;
-      debugPrint(debug, errorMessage);
-      throw new TypeError(errorMessage);
-    }
+    };
   }
 
   private async handleToolCalls(
@@ -138,33 +138,40 @@ export class Swarm {
     };
 
     for (const toolCall of toolCalls) {
-      const name = toolCall.function.name;
-      if (!functionMap.has(name)) {
-        debugPrint(debug, `Tool ${name} not found in function map.`);
+      console.log(`Tool call: ${JSON.stringify(toolCall)}`);
+      // Add safe parsing of arguments
+      const funName = toolCall.function.name;
+      //debugPrint(debug, `Tool call name: ${funName}`);
+      console.log(`Tool call name: ${funName}`);
+      if (!functionMap.has(funName)) {
+        debugPrint(debug, `Tool ${funName} not found in function map.`);
         partialResponse.messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
-          name,
-          content: `Error: Tool ${name} not found.`
+          name: funName,
+          content: `Error: Tool ${funName} not found.`
         });
         continue;
       }
 
       const args = JSON.parse(toolCall.function.arguments);
-      debugPrint(debug, `Processing tool call: ${name} with arguments`, args);
+      //debugPrint(debug, `Processing tool call: ${funName} with arguments`, args);
+      console.log(`Processing tool call: ${funName} with arguments`, args);
 
-      const func = functionMap.get(name)!;
+      const func = functionMap.get(funName)!;
       if (func.toString().includes(CTX_VARS_NAME)) {
         args[CTX_VARS_NAME] = contextVariables;
       }
 
-      const rawResult = await Promise.resolve(func(args));
+      console.log(`Calling function: ${func.name} with arguments: ${JSON.stringify(args)}`);
+      const rawResult = await Promise.resolve(func(...Object.values(args)));
       const result = this.handleFunctionResult(rawResult, debug);
 
+      console.log(`Tool call result: ${JSON.stringify(result)}`);
       partialResponse.messages.push({
         role: 'tool',
         tool_call_id: toolCall.id,
-        name,
+        name: funName,
         content: result.value
       });
 
@@ -239,6 +246,18 @@ export class Swarm {
         break;
       }
 
+      console.log(`Raw tool calls>>>>>>>: ${JSON.stringify(message.tool_calls)}`);
+      if (message.tool_calls) {
+        // Check if tool_calls is an array, if not, wrap it in an array
+        const toolCallsArray = Array.isArray(message.tool_calls) 
+          ? message.tool_calls 
+          : [message.tool_calls];
+        
+        const sanitizedToolCalls = toolCallsArray.map(call => 
+          this.sanitizeToolCall(call)
+        );
+        message.tool_calls = sanitizedToolCalls;
+      }
       const partialResponse = await this.handleToolCalls(
         message.tool_calls,
         activeAgent.functions,
@@ -309,6 +328,17 @@ export class Swarm {
         break;
       }
 
+      if (message.tool_calls) {
+        // Check if tool_calls is an array, if not, wrap it in an array
+        const toolCallsArray = Array.isArray(message.tool_calls) 
+          ? message.tool_calls 
+          : [message.tool_calls];
+        
+        const sanitizedToolCalls = toolCallsArray.map(call => 
+          this.sanitizeToolCall(call)
+        );
+        message.tool_calls = sanitizedToolCalls;
+      }
       const partialResponse = await this.handleToolCalls(
         message.tool_calls,
         activeAgent.functions,
@@ -327,6 +357,38 @@ export class Swarm {
       messages: history.slice(initLen),
       agent: activeAgent,
       contextVariables: ctxVars
+    };
+  }
+
+  private sanitizeToolCall(toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall): OpenAI.Chat.Completions.ChatCompletionMessageToolCall {
+    // Ensure toolCall has required properties with default values
+    const type = toolCall.type || 'function';
+    const id = toolCall.id || `call_${Math.random().toString(36).substr(2, 9)}`;
+    const name = toolCall.function?.name || '';
+    const args = toolCall.function?.arguments || '{}';
+
+    // Rest of sanitization logic
+    const hasDuplication = type.includes('functionfunction');
+    
+    // Handle ID based on whether duplication is detected
+    const sanitizedId = hasDuplication ? 'call_' + id.split('call_')[1]?.split('call_')[0] : id;
+    
+    // Remove multiple repetitions of "function"
+    const sanitizedType = type.replace(/(function)+/, 'function');
+    
+    // Remove multiple repetitions of the same name
+    const sanitizedName = name.replace(/(\w+)(?:\1)+/, '$1');
+    
+    // Remove multiple repetitions of empty objects
+    const sanitizedArgs = args.replace(/(?:\{\})+/, '{}');
+
+    return {
+        id: sanitizedId,
+        type: sanitizedType as 'function',
+        function: {
+            name: sanitizedName,
+            arguments: sanitizedArgs
+        }
     };
   }
 }
