@@ -247,17 +247,6 @@ export class Swarm {
       }
 
       console.log(`Raw tool calls>>>>>>>: ${JSON.stringify(message.tool_calls)}`);
-      if (message.tool_calls) {
-        // Check if tool_calls is an array, if not, wrap it in an array
-        const toolCallsArray = Array.isArray(message.tool_calls) 
-          ? message.tool_calls 
-          : [message.tool_calls];
-        
-        const sanitizedToolCalls = toolCallsArray.map(call => 
-          this.sanitizeToolCall(call)
-        );
-        message.tool_calls = sanitizedToolCalls;
-      }
       const partialResponse = await this.handleToolCalls(
         message.tool_calls,
         activeAgent.functions,
@@ -328,17 +317,6 @@ export class Swarm {
         break;
       }
 
-      if (message.tool_calls) {
-        // Check if tool_calls is an array, if not, wrap it in an array
-        const toolCallsArray = Array.isArray(message.tool_calls) 
-          ? message.tool_calls 
-          : [message.tool_calls];
-        
-        const sanitizedToolCalls = toolCallsArray.map(call => 
-          this.sanitizeToolCall(call)
-        );
-        message.tool_calls = sanitizedToolCalls;
-      }
       const partialResponse = await this.handleToolCalls(
         message.tool_calls,
         activeAgent.functions,
@@ -357,38 +335,6 @@ export class Swarm {
       messages: history.slice(initLen),
       agent: activeAgent,
       contextVariables: ctxVars
-    };
-  }
-
-  private sanitizeToolCall(toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall): OpenAI.Chat.Completions.ChatCompletionMessageToolCall {
-    // Ensure toolCall has required properties with default values
-    const type = toolCall.type || 'function';
-    const id = toolCall.id || `call_${Math.random().toString(36).substr(2, 9)}`;
-    const name = toolCall.function?.name || '';
-    const args = toolCall.function?.arguments || '{}';
-
-    // Rest of sanitization logic
-    const hasDuplication = type.includes('functionfunction');
-    
-    // Handle ID based on whether duplication is detected
-    const sanitizedId = hasDuplication ? 'call_' + id.split('call_')[1]?.split('call_')[0] : id;
-    
-    // Remove multiple repetitions of "function"
-    const sanitizedType = type.replace(/(function)+/, 'function');
-    
-    // Remove multiple repetitions of the same name
-    const sanitizedName = name.replace(/(\w+)(?:\1)+/, '$1');
-    
-    // Remove multiple repetitions of empty objects
-    const sanitizedArgs = args.replace(/(?:\{\})+/, '{}');
-
-    return {
-        id: sanitizedId,
-        type: sanitizedType as 'function',
-        function: {
-            name: sanitizedName,
-            arguments: sanitizedArgs
-        }
     };
   }
 }

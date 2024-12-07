@@ -46,27 +46,33 @@ async function processAndPrintStreamingResponse(response: AsyncGenerator<any, vo
   }
 }
 
-async function greet(names: string, time: string): Promise<string> {
-  // if (!Array.isArray(names)) {
-  //   names = [names]; // Convert single name to array if needed
-  // }
-  // // Limit array length and string lengths to avoid ID length issues
-  // names = names.slice(0, 5).map(name => String(name).slice(0, 20));
-  // return names.map(name => `Good ${time}, ${name}!`);
-  return `Good ${time}, ${names}!`;
+async function greet(names: string, timeOfDay: string): Promise<string> {
+  return `Good ${timeOfDay}, ${names}!`;
 }
 
-async function getTime(timeZone: string | { timeZone: string } = '+00:00'): Promise<string> {
+async function getTimeOfDay(timeZone: string | { timeZone: string } = '+00:00'): Promise<string> {
   const date = new Date();
   let hour: number;
   
   // Handle the case where timeZone is passed as an object
   const tzString = typeof timeZone === 'object' ? timeZone.timeZone : timeZone;
 
-  // Handle IANA timezone names (e.g., "America/New_York")
-  if (tzString.includes('/')) {
+  // Map common abbreviations to IANA timezone names
+  const timezoneMap: { [key: string]: string } = {
+    'PST': 'America/Los_Angeles',
+    'EST': 'America/New_York',
+    'MST': 'America/Denver',
+    'CST': 'America/Chicago',
+    // Add more mappings as needed
+  };
+
+  // Convert abbreviated timezone to IANA name if it exists in the map
+  const ianaTimezone = timezoneMap[tzString.toUpperCase()] || tzString;
+
+  // Handle IANA timezone names
+  if (ianaTimezone.includes('/')) {
     try {
-      const options = { timeZone: tzString, hour: 'numeric', hour12: false };
+      const options: Intl.DateTimeFormatOptions = { timeZone: ianaTimezone, hour: "numeric" as const, hour12: false };
       hour = parseInt(new Intl.DateTimeFormat('en-US', options).format(date));
     } catch (error) {
       throw new Error("Invalid IANA timezone name");
@@ -98,8 +104,15 @@ async function getTime(timeZone: string | { timeZone: string } = '+00:00'): Prom
   }
 }
 
-greet.description = 'Given a person\'s name, return a greeting message and use getTime tool to get the current time so that the tool can provide proper context.';
-getTime.description = 'Get the time of the day, such as morning, afternoon, or evening. This function should be called once, regardless of the number of people provided.';
+async function reviewAndApproveDAG(dag: any): Promise<string> {
+  console.log(`dag: ${JSON.stringify(dag, null, 2)}`);
+  return 'yes';
+}
+
+//greet.description = 'Given a person\'s name, return a greeting message and use getTime tool to get the current time so that the tool can provide proper context.';
+greet.description = 'Given a person\'s name, return a greeting message.';
+getTimeOfDay.description = 'Get the time of the day, such as morning, afternoon, or evening. This function should be called once, regardless of the number of people provided.';
+reviewAndApproveDAG.description = 'Review the DAG and return yes if it is correct, otherwise return no.';
 async function runDemoLoop() {
   // Initialize OpenAI client
   const client = new OpenAI({
@@ -113,9 +126,10 @@ async function runDemoLoop() {
   // Create a basic agent
   const agent: Agent = {
     name: 'Assistant',
-    model: 'gpt-4o-mini',
-    instructions: 'You are a helpful assistant.',
-    functions: [getTime, greet],
+    model: 'gpt-4o',
+    instructions: 'You are skilled project manager. You need to create a DAG to draft the customized greeting message. Then you need to execute the DAG if the DAG is reviewed and approved by the user. ',
+    //instructions: 'You are a helpful assistand. You need to create a greeting message for the given name and the message should include the customized message and the time of the day depending on the giventimezone.',
+    functions: [reviewAndApproveDAG, greet, getTimeOfDay],
     toolChoice: null,
     parallelToolCalls: true,
   };
