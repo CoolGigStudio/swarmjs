@@ -104,15 +104,10 @@ async function getTimeOfDay(timeZone: string | { timeZone: string } = '+00:00'):
   }
 }
 
-async function reviewAndApproveDAG(dag: any): Promise<string> {
-  console.log(`dag: ${JSON.stringify(dag, null, 2)}`);
-  return 'yes';
-}
 
 //greet.description = 'Given a person\'s name, return a greeting message and use getTime tool to get the current time so that the tool can provide proper context.';
 greet.description = 'Given a person\'s name, return a greeting message.';
 getTimeOfDay.description = 'Get the time of the day, such as morning, afternoon, or evening. This function should be called once, regardless of the number of people provided.';
-reviewAndApproveDAG.description = 'Review the DAG and return yes if it is correct, otherwise return no.';
 async function runDemoLoop() {
   // Initialize OpenAI client
   const client = new OpenAI({
@@ -123,16 +118,34 @@ async function runDemoLoop() {
   const swarm = new Swarm(client);
 
 
-  // Create a basic agent
-  const agent: Agent = {
+  //Create a basic agent
+  const dagCreationAgent: Agent = {
     name: 'Assistant',
     model: 'gpt-4o',
-    instructions: 'You are skilled project manager. You need to create a DAG to draft the customized greeting message. Then you need to execute the DAG if the DAG is reviewed and approved by the user. ',
-    //instructions: 'You are a helpful assistand. You need to create a greeting message for the given name and the message should include the customized message and the time of the day depending on the giventimezone.',
-    functions: [reviewAndApproveDAG, greet, getTimeOfDay],
+    instructions: 'You are skilled planner You need to create a plan in the strict DAG(Directed Acyclic Graph) format or achieving the goal to meet the user\'s request. The goal is: {goal}. The available tools: {functions}. Here are descriptions of the tools: {functionDescriptions}.',
+    functions: [transferToDagExecutionAgent],
     toolChoice: null,
     parallelToolCalls: true,
   };
+
+  const functions = [greet, getTimeOfDay];
+  const functionDescriptions = functions.map(f => ({name: f.name, description: (f as any).description})).map(f => `${f.name}: ${f.description}`).join('\n');
+  const dagExecutionAgent: Agent = {
+    name: 'Assistant',
+    model: 'gpt-4o',
+    instructions: 'You are skilled assistant. Your task is to execute the DAG. ',
+    functions: functions,
+    toolChoice: null,
+    parallelToolCalls: true,
+  };
+
+  async function transferToDagExecutionAgent(dag: any): Promise<Agent> {
+    console.log(`dag: ${JSON.stringify(dag, null, 2)}`);
+    dagExecutionAgent.instructions = `Here is the DAG: ${JSON.stringify(dag, null, 2)}, please execute the DAG to achieve the goal. `;
+    return dagExecutionAgent;
+  }
+
+  transferToDagExecutionAgent.description = 'Transfer the controle to the dagExecutionAgent.';
 
   console.log(chalk.green('Starting SwarmJS CLI 🐝'));
   console.log(chalk.gray('Type your messages and press Enter. Press Ctrl+C to exit.\n'));
@@ -151,8 +164,16 @@ async function runDemoLoop() {
     }
     messages.push({ role: 'user', content: userInput });
 
+    // replace the goal and functions in the instructions
+    let instructions = String(dagCreationAgent.instructions);
+    instructions = instructions.replace('{goal}', "create a customized greeting message for the given name and the timezone that the user provided.");
+    instructions = instructions.replace('{functions}', functions.map(f => f.name).join(', '));
+    instructions = instructions.replace('{functionDescriptions}', functionDescriptions);
+    console.log(chalk.gray(`instructions: ${instructions}`));
+    dagCreationAgent.instructions = instructions;
+
     const response = await swarm.run(
-      agent,
+      dagCreationAgent,
       messages,
       {},  // context variables
       null, // model override

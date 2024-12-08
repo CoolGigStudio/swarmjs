@@ -98,13 +98,12 @@ export class Swarm {
   }
 
   private handleFunctionResult(result: any, debug: boolean): Result {
-    // First check if it's already a Result object
+    // Case 1: Already a Result object
     if (result && typeof result === 'object' && 'value' in result && 'agent' in result && 'contextVariables' in result) {
         return result as Result;
     }
 
-    // Check if it's an Agent object
-    debugPrint(debug, 'Result:', result);
+    // Case 2: Agent object
     if (result && typeof result === 'object' && 'name' in result && 'model' in result) {
         return {
             value: JSON.stringify({ assistant: result.name }),
@@ -113,12 +112,18 @@ export class Swarm {
         };
     }
 
-    // Handle primitive return types (string, number, etc.)
-    return {
-        value: String(result),
-        agent: null,
-        contextVariables: {}
-    };
+    // Case 3: Handle other types with error checking
+    try {
+        return {
+            value: String(result),
+            agent: null,
+            contextVariables: {}
+        };
+    } catch (e) {
+        const errorMessage = `Failed to cast response to string: ${result}. Make sure agent functions return a string or Result object. Error: ${e}`;
+        debugPrint(debug, errorMessage);
+        throw new TypeError(errorMessage);
+    }
   }
 
   private async handleToolCalls(
