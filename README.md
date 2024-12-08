@@ -1,10 +1,6 @@
 # SwarmJS
 
-Agentic framework inspired from OpenAI's swarm framework for TypeScript and JavaScript.
-
-# SwarmJS
-
-A TypeScript framework for building and testing AI agent swarms using OpenAI's GPT models.
+Agentic framework inspired from OpenAI's swarm framework in Python for TypeScript and JavaScript.
 
 ## Prerequisites
 
