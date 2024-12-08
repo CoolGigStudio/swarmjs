@@ -12,6 +12,7 @@
   "scripts": {
     "build": "rimraf dist && tsc",
     "dev": "ts-node-dev --respawn --transpile-only src/cli/repl.ts",
+    "dev:debug": "cross-env DEBUG=true ts-node-dev --respawn --transpile-only src/cli/repl.ts",
     "start": "node dist/cli/repl.js",
     "test": "jest",
     "lint": "eslint . --ext .ts",

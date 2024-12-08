@@ -13,6 +13,8 @@ import { mergeChunk } from '../utils/merge';
 
 const CTX_VARS_NAME = 'contextVariables';
 
+const DEBUG = process.env.DEBUG === 'true';
+
 interface SafeFunctionDefinition extends FunctionDefinition {
   parameters: FunctionParameters & {
     properties: Record<string, unknown>;
@@ -96,28 +98,31 @@ export class Swarm {
   }
 
   private handleFunctionResult(result: any, debug: boolean): Result {
-    if ('value' in result && 'agent' in result && 'contextVariables' in result) {
-      return result as Result;
+    // Case 1: Already a Result object
+    if (result && typeof result === 'object' && 'value' in result && 'agent' in result && 'contextVariables' in result) {
+        return result as Result;
     }
 
-    if ('name' in result && 'model' in result) {
-      return {
-        value: JSON.stringify({ assistant: result.name }),
-        agent: result as Agent,
-        contextVariables: {}
-      };
+    // Case 2: Agent object
+    if (result && typeof result === 'object' && 'name' in result && 'model' in result) {
+        return {
+            value: JSON.stringify({ assistant: result.name }),
+            agent: result as Agent,
+            contextVariables: {}
+        };
     }
 
+    // Case 3: Handle other types with error checking
     try {
-      return {
-        value: String(result),
-        agent: null,
-        contextVariables: {}
-      };
+        return {
+            value: String(result),
+            agent: null,
+            contextVariables: {}
+        };
     } catch (e) {
-      const errorMessage = `Failed to cast response to string: ${result}. Make sure agent functions return a string or Result object. Error: ${e}`;
-      debugPrint(debug, errorMessage);
-      throw new TypeError(errorMessage);
+        const errorMessage = `Failed to cast response to string: ${result}. Make sure agent functions return a string or Result object. Error: ${e}`;
+        debugPrint(debug, errorMessage);
+        throw new TypeError(errorMessage);
     }
   }
 
@@ -138,33 +143,40 @@ export class Swarm {
     };
 
     for (const toolCall of toolCalls) {
-      const name = toolCall.function.name;
-      if (!functionMap.has(name)) {
-        debugPrint(debug, `Tool ${name} not found in function map.`);
+      console.log(`Tool call: ${JSON.stringify(toolCall)}`);
+      // Add safe parsing of arguments
+      const funName = toolCall.function.name;
+      //debugPrint(debug, `Tool call name: ${funName}`);
+      console.log(`Tool call name: ${funName}`);
+      if (!functionMap.has(funName)) {
+        debugPrint(debug, `Tool ${funName} not found in function map.`);
         partialResponse.messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
-          name,
-          content: `Error: Tool ${name} not found.`
+          name: funName,
+          content: `Error: Tool ${funName} not found.`
         });
         continue;
       }
 
       const args = JSON.parse(toolCall.function.arguments);
-      debugPrint(debug, `Processing tool call: ${name} with arguments`, args);
+      //debugPrint(debug, `Processing tool call: ${funName} with arguments`, args);
+      console.log(`Processing tool call: ${funName} with arguments`, args);
 
-      const func = functionMap.get(name)!;
+      const func = functionMap.get(funName)!;
       if (func.toString().includes(CTX_VARS_NAME)) {
         args[CTX_VARS_NAME] = contextVariables;
       }
 
-      const rawResult = await Promise.resolve(func(args));
+      console.log(`Calling function: ${func.name} with arguments: ${JSON.stringify(args)}`);
+      const rawResult = await Promise.resolve(func(...Object.values(args)));
       const result = this.handleFunctionResult(rawResult, debug);
 
+      console.log(`Tool call result: ${JSON.stringify(result)}`);
       partialResponse.messages.push({
         role: 'tool',
         tool_call_id: toolCall.id,
-        name,
+        name: funName,
         content: result.value
       });
 
@@ -239,6 +251,7 @@ export class Swarm {
         break;
       }
 
+      console.log(`Raw tool calls>>>>>>>: ${JSON.stringify(message.tool_calls)}`);
       const partialResponse = await this.handleToolCalls(
         message.tool_calls,
         activeAgent.functions,
