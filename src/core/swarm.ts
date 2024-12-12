@@ -247,9 +247,30 @@ export class Swarm {
       history.push(message);
 
       if (!message.tool_calls || !executeTools) {
+        if ('shouldTransferManually' in activeAgent) {
+          const agent = activeAgent as unknown as { 
+            shouldTransferManually: () => boolean;
+            updateLastResponse?: (response: string) => void;
+            nextAgent: () => Promise<Agent | null>;
+          };
+          
+          if (agent.updateLastResponse) {
+            agent.updateLastResponse(message.content || '');
+          }
+        
+          if (agent.shouldTransferManually()) {
+            debugPrint(debug, 'No tool calls, but manual transfer is required');
+            const nextAgent = await agent.nextAgent();
+            if (nextAgent) {
+              debugPrint(debug, 'Transferring to next agent manually');
+              activeAgent = nextAgent;
+              continue;
+            }
+          }
+        }
         debugPrint(debug, 'Ending turn.');
         break;
-      }
+     }
 
       console.log(`Raw tool calls>>>>>>>: ${JSON.stringify(message.tool_calls)}`);
       const partialResponse = await this.handleToolCalls(
