@@ -97,6 +97,8 @@ const metaAgent = new MetaDagExecutionAgent(
     functions
 );
 
+console.log('Meta agent:', metaAgent);
+
 // Run the example with the meta agent
 runExample('Enhanced DAG Example', () => metaAgent.getAgent())
     .catch((error) => {

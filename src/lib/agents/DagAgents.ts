@@ -68,17 +68,19 @@ export class DagCreationAgent extends BaseAgent {
 
         const creationInstructions = DAG_CREATION_INSTRUCTIONS
             .replace('{goal}', goal)
-            .replace('{functionList}', Array.from(functionMap.keys()).join(', '))
+            .replace('{functionList}', '\n' + Array.from(functionMap.keys()).join('\n'))
             .replace('{functionDescriptions}', BaseAgent.buildFunctionDescriptions(functions));
 
         const agent: Agent = {
-            name: 'Assistant',
+            name: 'Planner',
             model: 'gpt-4o',
             instructions: creationInstructions,
             functions: [executeDAGFunction],
             toolChoice: null,
             parallelToolCalls: true,
         };
+
+        console.log('Planner agent:', agent);
 
         super(goal, functions, agent);
     }
@@ -127,7 +129,7 @@ export class DagExecutionAgent extends BaseAgent {
 
     constructor(goal: string, functions: AgentFunction[], dagSteps: DagTask[]) {
         const createDagFunction: AgentFunction = async (args: { goal: string }) => {
-            const creationAgent = new DagCreationAgent(args.goal, functions);
+            const creationAgent = new DagCreationAgent(args.goal ?? args, functions);
             return {
                 value: 'DAG creation agent initialized',
                 agent: creationAgent.getAgent(),
@@ -171,16 +173,21 @@ export class DagExecutionAgent extends BaseAgent {
         const executionInstructions = DAG_EXECUTION_WITH_PLAN_INSTRUCTIONS
             .replace('{goal}', goal)
             .replace('{dagSteps}', JSON.stringify(dagSteps, null, 2))
-            .replace('{functionList}', enhancedFunctions.map(f => f.name).join(', '));
+            .replace('{functionList}', '\n' + enhancedFunctions.map(f => f.name).join('\n'));
+        
+        console.log('Execution instructions:', executionInstructions);
+        console.log('functions:', enhancedFunctions);
 
         const agent: Agent = {
-            name: 'Assistant',
+            name: 'Executor',
             model: 'gpt-4o',
             instructions: executionInstructions,
             functions: enhancedFunctions,
             toolChoice: null,
             parallelToolCalls: true,
         };
+
+        console.log('Executor agent:', agent);
 
         super(goal, functions, agent);
         this.dagSteps = dagSteps;

@@ -1,9 +1,14 @@
 export const DAG_CREATION_INSTRUCTIONS = `You are a helpful assistant. 
-You should first create a plan in a DAG(Directed Acyclic Graph) format to achieve this goal: {goal} 
+You should first create a plan in a DAG(Directed Acyclic Graph) format to achieve this goal: 
+
+# Goal:
+{goal} 
+
 Then you should execute the DAG by calling the function with the created DAG.
 
 Here are the available functions that the DAG will use: {functionList}
-Function descriptions:
+
+# Function descriptions:
 {functionDescriptions}
 
 Create a DAG as a JSON array. Each task should have:
@@ -95,7 +100,7 @@ Available functions: {functionList}`;
 export const META_DAG_INSTRUCTIONS = `You are executing a meta-DAG that controls the creation and execution of task DAGs.
 
 The meta-DAG has two phases:
-1. DAG Creation (create_dag):
+1. DAG Creation (createDagFunction):
    - Work with the creation agent to define the DAG structure
    - Support nested subdags for complex task decomposition
    - Store the created DAG for execution
@@ -104,6 +109,8 @@ The meta-DAG has two phases:
    - Execute the created DAG according to dependencies
    - Handle any nested sub-DAGs by creating new creation agents
    - Ensure all tasks and subdags complete successfully
+
+You should always start with the DAG Creation function to define the task flow.
 
 Your goal is: {goal}
 

@@ -143,6 +143,7 @@ export class Swarm {
     };
 
     for (const toolCall of toolCalls) {
+      toolCall.id = toolCall.id.substring(0, 40);
       console.log(`Tool call: ${JSON.stringify(toolCall)}`);
       // Add safe parsing of arguments
       const funName = toolCall.function.name;
@@ -152,7 +153,7 @@ export class Swarm {
         debugPrint(debug, `Tool ${funName} not found in function map.`);
         partialResponse.messages.push({
           role: 'tool',
-          tool_call_id: toolCall.id,
+          tool_call_id: toolCall.id.substring(0, 40),
           name: funName,
           content: `Error: Tool ${funName} not found.`
         });
@@ -175,9 +176,9 @@ export class Swarm {
       console.log(`Tool call result: ${JSON.stringify(result)}`);
       partialResponse.messages.push({
         role: 'tool',
-        tool_call_id: toolCall.id,
+        tool_call_id: toolCall.id.substring(0, 40),
         name: funName,
-        content: result.value
+        content: result.value,
       });
 
       partialResponse.contextVariables = {
