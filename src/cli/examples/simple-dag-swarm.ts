@@ -1,12 +1,15 @@
+// simple-dag-swarm.ts
 import chalk from 'chalk';
 import { runExample } from '../repl';
-import { MetaDagExecutionAgent } from '../../lib/agents/DagAgents';
+import { DagCreationAgent, MetaDagCoordinator } from '../../lib/agents/DagAgents';
 import { AgentFunction } from '../../core/types';
 
+// Create greeting function with timezone awareness
 async function create_greeting(names: string, timeOfDay: string): Promise<string> {
     return `Good ${timeOfDay}, ${names}!`;
 }
 
+// Timezone handling function with support for various formats
 async function get_time_of_day(timeZone: string | { timeZone: string } = '+00:00'): Promise<string> {
     const date = new Date();
     let hour: number;
@@ -53,70 +56,46 @@ async function get_time_of_day(timeZone: string | { timeZone: string } = '+00:00
     else return "evening";
 }
 
-// Add function descriptions
+// Add necessary properties to the functions for proper discovery and usage
+Object.defineProperty(create_greeting, 'name', {
+    value: 'create_greeting',
+    configurable: false,
+    writable: false
+});
+
 Object.defineProperty(create_greeting, 'description', {
-    value: 'Given a person\'s name, return a greeting message.'
+    value: 'Creates a personalized greeting message using the provided name and time of day.',
+    configurable: false,
+    writable: false
+});
+
+Object.defineProperty(get_time_of_day, 'name', {
+    value: 'get_time_of_day',
+    configurable: false,
+    writable: false
 });
 
 Object.defineProperty(get_time_of_day, 'description', {
-    value: 'Get the time of day (morning, afternoon, or evening) for the given timezone.'
+    value: 'Determines the time of day (morning, afternoon, or evening) for a given timezone. Supports IANA timezone names and offset formats.',
+    configurable: false,
+    writable: false
 });
 
-// Optional: Define a predefined DAG structure if you want to enforce a specific flow
-const greetingDag = {
-    nodes: {
-        'getTime': {
-            id: 'getTime',
-            type: 'function',
-            functionName: 'get_time_of_day',
-            functionArgs: {
-                timeZone: 'EST'  // Default timezone, LLM can modify this
-            },
-            dependencies: []
-        },
-        'createGreeting': {
-            id: 'createGreeting',
-            type: 'function',
-            functionName: 'create_greeting',
-            functionArgs: {
-                names: 'User',  // Default name, LLM can modify this
-                timeOfDay: '$getTime'
-            },
-            dependencies: ['getTime']
-        }
-    },
-    startNodes: ['getTime']
-};
-
-// Initialize the functions array
+// Initialize the functions array with our timezone-aware greeting functions
 const functions: AgentFunction[] = [create_greeting, get_time_of_day];
 
-// Create the meta agent
-const metaAgent = new MetaDagExecutionAgent(
-    "create a customized greeting message for the given name and the timezone that the user provided",
-    functions
-);
+// Define the goal for our DAG system
+const goal = "create a customized greeting message for the given name and timezone that the user provided";
 
-// Run the example with the meta agent
-runExample('Enhanced DAG Example', () => metaAgent.getAgent())
-    .catch((error) => {
-        console.error(chalk.red('Error:'), error);
-        process.exit(1);
-    });
-
-// Alternatively, if you want to use the predefined DAG:
-/*
-import { DagExecutionAgent } from '../../lib/swarms/nested-dag';
-
-const executionAgent = new DagExecutionAgent(
-    "create a customized greeting message for the given name and the timezone that the user provided",
-    functions,
-    greetingDag
-);
-
-runExample('Enhanced DAG Example', () => executionAgent.getAgent())
-    .catch((error) => {
-        console.error(chalk.red('Error:'), error);
-        process.exit(1);
-    });
-*/
+// Run the example with error handling
+runExample('DAG Swarm Example', () => {
+    const coordinator = new MetaDagCoordinator(
+        goal,
+        functions
+    );
+    return coordinator;
+})
+.catch((error) => {
+    console.error(chalk.red('Error:'), error);
+    process.exit(1);
+});

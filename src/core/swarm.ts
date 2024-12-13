@@ -1,3 +1,4 @@
+// swarm.ts
 import OpenAI from 'openai';
 import { 
   ChatCompletionTool,
@@ -6,14 +7,13 @@ import {
   ChatCompletionToolChoiceOption
 } from 'openai/resources/chat/completions';
 import { FunctionDefinition, FunctionParameters } from 'openai/resources/shared';
+import { BaseAgent } from './BaseAgent';
 import { Agent, Response, Result, AgentFunction } from './types';
 import { debugPrint } from '../utils/debug';
 import { functionToJson } from '../utils/function-parser';
 import { mergeChunk } from '../utils/merge';
 
 const CTX_VARS_NAME = 'contextVariables';
-
-const DEBUG = process.env.DEBUG === 'true';
 
 interface SafeFunctionDefinition extends FunctionDefinition {
   parameters: FunctionParameters & {
@@ -25,46 +25,68 @@ interface SafeChatCompletionTool extends Omit<ChatCompletionTool, 'function'> {
   function: SafeFunctionDefinition;
 }
 
+type BaseAgentConstructor = new (
+  goal: string, 
+  functions: AgentFunction[], 
+  agent: Agent
+) => BaseAgent;
+
 export class Swarm {
   private client: OpenAI;
+  private idCounter: number = 0;
+  // Use the constructor type instead of typeof BaseAgent
+  private agentRegistry: Map<string, BaseAgentConstructor> = new Map();
 
   constructor(client?: OpenAI) {
-    this.client = client || new OpenAI();
+      this.client = client || new OpenAI();
+  }
+
+  // Update the register method to use the constructor type
+  public registerAgent(name: string, agentClass: BaseAgentConstructor) {
+      this.agentRegistry.set(name, agentClass);
+  }
+
+  private createAgentInstance(agentConfig: Agent, currentAgent: BaseAgent): BaseAgent | null {
+      const AgentClass = this.agentRegistry.get(agentConfig.name);
+      if (!AgentClass) {
+          debugPrint(true, `No agent class registered for name: ${agentConfig.name}`);
+          return null;
+      }
+      return new AgentClass(currentAgent.goal, currentAgent.functions, agentConfig);
+  }
+
+  private generateToolCallId(): string {
+    return `call_${(this.idCounter++).toString(36)}`.slice(0, 40);
   }
 
   private async getChatCompletion(
-    agent: Agent,
-    history: any[],
+    agent: BaseAgent,
+    history: ChatCompletionMessageParam[],
     contextVariables: Record<string, any>,
     modelOverride: string | null,
     stream: boolean,
     debug: boolean
   ): Promise<OpenAI.Chat.Completions.ChatCompletion | AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> {
-    const instructions = typeof agent.instructions === 'function'
-      ? agent.instructions(contextVariables)
-      : agent.instructions;
-
+    const agentInfo = agent.getAgent();
+    const instructions = typeof agentInfo.instructions === 'function'
+      ? agentInfo.instructions(contextVariables)
+      : agentInfo.instructions;
     const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: instructions },
+      { role: 'system', content: instructions as string },
       ...history
     ];
     
     debugPrint(debug, 'Getting chat completion for...:', messages);
 
-    const tools: ChatCompletionTool[] = agent.functions.map(f => {
-      // Get the tool with guaranteed parameter structure
+    const tools: ChatCompletionTool[] = agentInfo.functions.map(f => {
       const rawTool = functionToJson(f);
       const tool = rawTool as SafeChatCompletionTool;
-      
-      // Type-safe parameter manipulation
       const properties = tool.function.parameters.properties;
       
-      // Remove context variables if they exist
       if (CTX_VARS_NAME in properties) {
         delete properties[CTX_VARS_NAME];
       }
 
-      // Handle required parameters
       if (Array.isArray(tool.function.parameters.required)) {
         const required = tool.function.parameters.required;
         const contextVarIndex = required.indexOf(CTX_VARS_NAME);
@@ -81,15 +103,14 @@ export class Swarm {
     });
 
     const createParams: ChatCompletionCreateParams = {
-      model: modelOverride || agent.model,
+      model: modelOverride || agentInfo.model,
       messages,
       tools: tools.length > 0 ? tools : undefined,
       stream
     };
 
-    // Handle tool_choice based on OpenAI's expected types
     if (tools.length > 0) {
-      createParams.tool_choice = (agent.toolChoice ?? 'auto') as ChatCompletionToolChoiceOption;
+      createParams.tool_choice = agentInfo.toolChoice ?? 'auto';
     } else {
       createParams.tool_choice = 'none';
     }
@@ -98,31 +119,28 @@ export class Swarm {
   }
 
   private handleFunctionResult(result: any, debug: boolean): Result {
-    // Case 1: Already a Result object
     if (result && typeof result === 'object' && 'value' in result && 'agent' in result && 'contextVariables' in result) {
-        return result as Result;
+      return result as Result;
     }
 
-    // Case 2: Agent object
     if (result && typeof result === 'object' && 'name' in result && 'model' in result) {
-        return {
-            value: JSON.stringify({ assistant: result.name }),
-            agent: result as Agent,
-            contextVariables: {}
-        };
+      return {
+        value: JSON.stringify({ assistant: result.name }),
+        agent: result as Agent,
+        contextVariables: {}
+      };
     }
 
-    // Case 3: Handle other types with error checking
     try {
-        return {
-            value: String(result),
-            agent: null,
-            contextVariables: {}
-        };
+      return {
+        value: String(result),
+        agent: null,
+        contextVariables: {}
+      };
     } catch (e) {
-        const errorMessage = `Failed to cast response to string: ${result}. Make sure agent functions return a string or Result object. Error: ${e}`;
-        debugPrint(debug, errorMessage);
-        throw new TypeError(errorMessage);
+      const errorMessage = `Failed to cast response to string: ${result}. Make sure agent functions return a string or Result object. Error: ${e}`;
+      debugPrint(debug, errorMessage);
+      throw new TypeError(errorMessage);
     }
   }
 
@@ -132,61 +150,82 @@ export class Swarm {
     contextVariables: Record<string, any>,
     debug: boolean
   ): Promise<Response> {
-    const functionMap = new Map(
-      functions.map(f => [f.name, f])
-    );
-
+    const functionMap = new Map(functions.map(f => [f.name, f]));
     const partialResponse: Response = {
       messages: [],
       agent: null,
       contextVariables: {}
     };
 
-    for (const toolCall of toolCalls) {
-      console.log(`Tool call: ${JSON.stringify(toolCall)}`);
-      // Add safe parsing of arguments
-      const funName = toolCall.function.name;
-      //debugPrint(debug, `Tool call name: ${funName}`);
-      console.log(`Tool call name: ${funName}`);
-      if (!functionMap.has(funName)) {
-        debugPrint(debug, `Tool ${funName} not found in function map.`);
-        partialResponse.messages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          name: funName,
-          content: `Error: Tool ${funName} not found.`
-        });
-        continue;
-      }
-
-      const args = JSON.parse(toolCall.function.arguments);
-      //debugPrint(debug, `Processing tool call: ${funName} with arguments`, args);
-      console.log(`Processing tool call: ${funName} with arguments`, args);
-
-      const func = functionMap.get(funName)!;
-      if (func.toString().includes(CTX_VARS_NAME)) {
-        args[CTX_VARS_NAME] = contextVariables;
-      }
-
-      console.log(`Calling function: ${func.name} with arguments: ${JSON.stringify(args)}`);
-      const rawResult = await Promise.resolve(func(...Object.values(args)));
-      const result = this.handleFunctionResult(rawResult, debug);
-
-      console.log(`Tool call result: ${JSON.stringify(result)}`);
-      partialResponse.messages.push({
-        role: 'tool',
-        tool_call_id: toolCall.id,
-        name: funName,
-        content: result.value
+    const toolCallPromises = toolCalls.map(async toolCall => {
+      const originalId = toolCall.id;
+      console.log(`Processing tool call:`, {
+        id: originalId,
+        name: toolCall.function.name,
+        args: toolCall.function.arguments
       });
 
-      partialResponse.contextVariables = {
-        ...partialResponse.contextVariables,
-        ...result.contextVariables
-      };
+      if (!functionMap.has(toolCall.function.name)) {
+        debugPrint(debug, `Tool ${toolCall.function.name} not found in function map.`);
+        return {
+          message: {
+            role: 'tool' as const,
+            tool_call_id: originalId,
+            name: toolCall.function.name,
+            content: `Error: Tool ${toolCall.function.name} not found.`
+          },
+          result: null
+        };
+      }
 
-      if (result.agent) {
+      try {
+        const args = JSON.parse(toolCall.function.arguments);
+        const func = functionMap.get(toolCall.function.name)!;
+
+        if (func.toString().includes(CTX_VARS_NAME)) {
+          args[CTX_VARS_NAME] = contextVariables;
+        }
+
+        const rawResult = await Promise.resolve(func(...Object.values(args)));
+        const result = this.handleFunctionResult(rawResult, debug);
+
+        return {
+          message: {
+            role: 'tool' as const,
+            tool_call_id: originalId,
+            name: toolCall.function.name,
+            content: result.value
+          },
+          result
+        };
+      } catch (error) {
+        console.error(`Error executing function ${toolCall.function.name}:`, error);
+        return {
+          message: {
+            role: 'tool' as const,
+            tool_call_id: originalId,
+            name: toolCall.function.name,
+            content: `Error executing function: ${error instanceof Error ? error.message : String(error)}`
+          },
+          result: null
+        };
+      }
+    });
+
+    const results = await Promise.all(toolCallPromises);
+
+    for (const { message, result } of results) {
+      partialResponse.messages.push(message);
+      
+      if (result?.agent) {
         partialResponse.agent = result.agent;
+      }
+      
+      if (result?.contextVariables) {
+        partialResponse.contextVariables = {
+          ...partialResponse.contextVariables,
+          ...result.contextVariables
+        };
       }
     }
 
@@ -194,7 +233,7 @@ export class Swarm {
   }
 
   async *runAndStream(
-    agent: Agent,
+    agent: BaseAgent,
     messages: any[],
     contextVariables: Record<string, any> = {},
     modelOverride: string | null = null,
@@ -210,7 +249,7 @@ export class Swarm {
     while (history.length - initLen < maxTurns) {
       const message: Record<string, any> = {
         content: '',
-        sender: agent.name,
+        sender: activeAgent.getAgent().name,
         role: 'assistant',
         function_call: null,
         tool_calls: {}
@@ -230,7 +269,7 @@ export class Swarm {
       for await (const chunk of completion as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>) {
         const delta = chunk.choices[0].delta;
         if (delta.role === 'assistant') {
-          (delta as any).sender = activeAgent.name;
+          (delta as any).sender = activeAgent.getAgent().name;
         }
         yield delta;
         mergeChunk(message, delta as any);
@@ -247,35 +286,24 @@ export class Swarm {
       history.push(message);
 
       if (!message.tool_calls || !executeTools) {
-        if ('shouldTransferManually' in activeAgent) {
-          const agent = activeAgent as unknown as { 
-            shouldTransferManually: () => boolean;
-            updateLastResponse?: (response: string) => void;
-            nextAgent: () => Promise<Agent | null>;
-          };
-          
-          if (agent.updateLastResponse) {
-            agent.updateLastResponse(message.content || '');
-          }
-        
-          if (agent.shouldTransferManually()) {
-            debugPrint(debug, 'No tool calls, but manual transfer is required');
-            const nextAgent = await agent.nextAgent();
-            if (nextAgent) {
-              debugPrint(debug, 'Transferring to next agent manually');
-              activeAgent = nextAgent;
-              continue;
-            }
+        debugPrint(debug, 'LLM trying to end turn, activeAgent:', activeAgent.getAgent());
+        if (activeAgent.shouldTransferManually()) {
+          debugPrint(debug, 'Agent requested manual transfer');
+          activeAgent.updateLastResponse(message.content || '');
+          const nextAgent = await activeAgent.nextAgent();
+          if (nextAgent) {
+            debugPrint(debug, 'Transferring to next agent manually');
+            activeAgent = nextAgent;
           }
         }
+        
         debugPrint(debug, 'Ending turn.');
         break;
-     }
+      }
 
-      console.log(`Raw tool calls>>>>>>>: ${JSON.stringify(message.tool_calls)}`);
       const partialResponse = await this.handleToolCalls(
         message.tool_calls,
-        activeAgent.functions,
+        activeAgent.getAgent().functions,
         ctxVars,
         debug
       );
@@ -283,21 +311,24 @@ export class Swarm {
       history.push(...partialResponse.messages);
       Object.assign(ctxVars, partialResponse.contextVariables);
       if (partialResponse.agent) {
-        activeAgent = partialResponse.agent;
+        const newAgent = this.createAgentInstance(partialResponse.agent, activeAgent);
+        if (newAgent) {
+          activeAgent = newAgent;
+        }
       }
     }
 
     yield {
       response: {
         messages: history.slice(initLen),
-        agent: activeAgent,
+        agent: activeAgent.getAgent(),
         contextVariables: ctxVars
       }
     };
   }
 
   async run(
-    agent: Agent,
+    agent: BaseAgent,
     messages: any[],
     contextVariables: Record<string, any> = {},
     modelOverride: string | null = null,
@@ -323,7 +354,7 @@ export class Swarm {
     const history = [...messages];
     const initLen = messages.length;
 
-    while (history.length - initLen < maxTurns && activeAgent) {
+    while (history.length - initLen < maxTurns) {
       const completion = await this.getChatCompletion(
         activeAgent,
         history,
@@ -335,17 +366,29 @@ export class Swarm {
 
       const message = completion.choices[0].message;
       debugPrint(debug, 'Received completion:', message);
-      (message as any).sender = activeAgent.name;
+      (message as any).sender = activeAgent.getAgent().name;
       history.push(JSON.parse(JSON.stringify(message)));
 
       if (!message.tool_calls || !executeTools) {
+        debugPrint(debug, 'LLM trying to end turn, activeAgent:', activeAgent.getAgent());
+        if (activeAgent.shouldTransferManually()) {
+          debugPrint(debug, 'Agent requested manual transfer');
+          activeAgent.updateLastResponse(message.content || '');
+          const nextAgent = await activeAgent.nextAgent();
+          if (nextAgent) {
+            debugPrint(debug, 'Transferring to next agent manually');
+            activeAgent = nextAgent as BaseAgent;
+            continue;
+          }
+        }
+        
         debugPrint(debug, 'Ending turn.');
         break;
       }
 
       const partialResponse = await this.handleToolCalls(
         message.tool_calls,
-        activeAgent.functions,
+        activeAgent.getAgent().functions,
         ctxVars,
         debug
       );
@@ -353,13 +396,16 @@ export class Swarm {
       history.push(...partialResponse.messages);
       Object.assign(ctxVars, partialResponse.contextVariables);
       if (partialResponse.agent) {
-        activeAgent = partialResponse.agent;
+        const newAgent = this.createAgentInstance(partialResponse.agent, activeAgent);
+        if (newAgent) {
+          activeAgent = newAgent;
+        }
       }
     }
 
     return {
       messages: history.slice(initLen),
-      agent: activeAgent,
+      agent: activeAgent.getAgent(),
       contextVariables: ctxVars
     };
   }

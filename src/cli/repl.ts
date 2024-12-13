@@ -3,7 +3,7 @@ import { createInterface } from 'readline';
 import chalk from 'chalk';
 import { Swarm } from '../core/swarm';
 import OpenAI from 'openai';
-import { Agent } from '../core/types';
+import { BaseAgent } from '../core/BaseAgent';
 
 const DEBUG = process.env.DEBUG === 'true';
 
@@ -47,7 +47,7 @@ async function processAndPrintStreamingResponse(response: AsyncGenerator<any, vo
 
 export async function runExample(
     name: string,
-    getAgent: () => Promise<Agent> | Agent
+    getAgent: () => Promise<BaseAgent> | BaseAgent
 ) {
     const client = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
