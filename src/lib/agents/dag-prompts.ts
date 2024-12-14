@@ -47,7 +47,7 @@ Example:
   }
 ]
 
-After creating the DAG, call the tool to execute it.`;
+After creating the DAG, call the executeDagFunction function to execute it.`;
 
 export const SUB_DAG_CREATION_INSTRUCTIONS = `You are a helpful assistant responsible for creating a sub-DAG plan.
 Your goal is: {goal}
@@ -100,6 +100,8 @@ Your role is to:
 - Execute tasks in the correct order based on dependencies
 - Properly handle function results and pass them to dependent tasks
 - DO NOT modify the DAG structure or create new tasks
+
+* If user provides a parameter value which is different from the value in the DAG, use the user-provided value.
 
 Available functions: {functionList}`;
 

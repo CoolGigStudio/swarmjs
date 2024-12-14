@@ -1,7 +1,7 @@
 // simple-dag-swarm.ts
 import chalk from 'chalk';
 import { runExample } from '../repl';
-import { DagCreationAgent, MetaDagCoordinator } from '../../lib/agents/DagAgents';
+import { DagCreationAgent, DagExecutionAgent, DagTask, MetaDagCoordinator } from '../../lib/agents/DagAgents';
 import { AgentFunction } from '../../core/types';
 
 // Create greeting function with timezone awareness
@@ -87,8 +87,8 @@ const functions: AgentFunction[] = [create_greeting, get_time_of_day];
 // Define the goal for our DAG system
 const goal = "create a customized greeting message for the given name and timezone that the user provided";
 
-// Run the example with error handling
-runExample('DAG Swarm Example', () => {
+// Input example: John, +08:00
+runExample('DAG Swarm Example - Case # 2 with automatically generated dag', () => {
     const coordinator = new MetaDagCoordinator(
         goal,
         functions
@@ -99,3 +99,41 @@ runExample('DAG Swarm Example', () => {
     console.error(chalk.red('Error:'), error);
     process.exit(1);
 });
+
+/*
+// Input example: John, +08:00
+runExample('DAG Swarm Example - Case # 1 with predefined dag', () => {
+    const dag: DagTask[] = [
+        {
+            id: "determineTimeOfDay",
+            type: "function",
+            functionName: "get_time_of_day",
+            functionArgs: {
+                timeZone: "+08:00"
+            },
+            dependencies: []
+        },
+        {
+            id: "createGreetingMessage",
+            type: "function",
+            functionName: "create_greeting",
+            functionArgs: {
+                names: "John",
+                timeOfDay: "$determineTimeOfDay"
+            },
+            dependencies: ["determineTimeOfDay"]
+        }
+    ];
+
+    const executor = new DagExecutionAgent(
+        goal,
+        functions,
+        dag
+    );
+    return executor;
+})
+.catch((error) => {
+    console.error(chalk.red('Error:'), error);
+    process.exit(1);
+});
+*/

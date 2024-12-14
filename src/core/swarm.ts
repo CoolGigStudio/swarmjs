@@ -51,6 +51,7 @@ export class Swarm {
       if (!AgentClass) {
           debugPrint(true, `No agent class registered for name: ${agentConfig.name}`);
           return null;
+          
       }
       return new AgentClass(currentAgent.goal, currentAgent.functions, agentConfig);
   }
@@ -227,6 +228,10 @@ export class Swarm {
           ...result.contextVariables
         };
       }
+
+      if (result?.instance) {
+        partialResponse.instance = result.instance;
+      }
     }
 
     return partialResponse;
@@ -314,6 +319,9 @@ export class Swarm {
         const newAgent = this.createAgentInstance(partialResponse.agent, activeAgent);
         if (newAgent) {
           activeAgent = newAgent;
+        } else {
+          console.log('Use the passed agent directly');
+          activeAgent = partialResponse.instance;
         }
       }
     }

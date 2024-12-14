@@ -17,7 +17,8 @@ export type Agent = z.infer<typeof AgentSchema>;
 export const ResponseSchema = z.object({
   messages: z.array(z.any()).default([]),
   agent: AgentSchema.nullable().default(null),
-  contextVariables: z.record(z.any()).default({})
+  contextVariables: z.record(z.any()).default({}),
+  instance: z.any(),
 });
 
 export type Response = z.infer<typeof ResponseSchema>;
@@ -25,7 +26,8 @@ export type Response = z.infer<typeof ResponseSchema>;
 export const ResultSchema = z.object({
   value: z.string().default(''),
   agent: AgentSchema.nullable().default(null),
-  contextVariables: z.record(z.any()).default({})
+  contextVariables: z.record(z.any()).default({}),
+  instance: z.any(),
 });
 
 export type Result = z.infer<typeof ResultSchema>;

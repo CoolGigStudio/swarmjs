@@ -9,7 +9,7 @@ import {
     META_DAG_INSTRUCTIONS
 } from './dag-prompts';
 
-interface DagTask {
+export interface DagTask {
     id: string;
     type: 'function' | 'subdag';
     functionName?: string;
@@ -35,7 +35,7 @@ export class DagCreationAgent extends BaseAgent {
             return this.transferToDagExecution(dag);
         };
         Object.defineProperty(executeDagFunction, 'description', {
-            value: 'Execute the provided newly created DAG',
+            value: 'Execute the provided newly created DAG. The argument must be a JSON array instead of a json string.',
             writable: false,
             configurable: false
         });
@@ -46,7 +46,7 @@ export class DagCreationAgent extends BaseAgent {
 
         const agent: Agent = {
             name: isSubDag ? 'SubDAG Creator' : 'DAG Creator',
-            model: 'gpt-4',
+            model: 'gpt-4o',
             instructions: instructions
                 .replace('{goal}', goal)
                 .replace('{functionList}', functions.map(f => BaseAgent.sanitizeFunctionName(f.name)).join(', '))
@@ -56,6 +56,8 @@ export class DagCreationAgent extends BaseAgent {
             parallelToolCalls: true
         };
 
+        console.log('Planner agent:', agent);
+
         super(goal, functions, agent);
     }
 
@@ -64,15 +66,20 @@ export class DagCreationAgent extends BaseAgent {
         this.createdDag = dag;
         this.dagExecuted = true;
     
+        console.log('Transfer to DAG execution:', dag);
+
+        const agent = new DagExecutionAgent(
+            this.goal,
+            this.functions,
+            dag,
+            this.parentResults
+        );
+        
         return {
             value: 'DAG created successfully',
-            agent: new DagExecutionAgent(
-                this.goal,
-                this.functions,
-                dag,
-                this.parentResults
-            ).getAgent(),
-            contextVariables: {}
+            agent: agent.getAgent(),
+            contextVariables: {},
+            instance: agent,
         };
     }
 
@@ -165,7 +172,7 @@ export class DagExecutionAgent extends BaseAgent {
     ) {
         const agent: Agent = {
             name: 'DAG Executor',
-            model: 'gpt-4',
+            model: 'gpt-4o',
             instructions: DAG_EXECUTION_INSTRUCTIONS
                 .replace('{dagStructure}', JSON.stringify(dag, null, 2))
                 .replace('{functionList}', functions.map(f => BaseAgent.sanitizeFunctionName(f.name)).join(', ')),
@@ -173,6 +180,8 @@ export class DagExecutionAgent extends BaseAgent {
             toolChoice: 'auto',
             parallelToolCalls: true
         };
+
+        console.log('Execution agent:', agent);
 
         super(goal, functions, agent);
     }

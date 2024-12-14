@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import { Swarm } from '../core/swarm';
 import OpenAI from 'openai';
 import { BaseAgent } from '../core/BaseAgent';
+import { DagExecutionAgent } from '../core';
 
 const DEBUG = process.env.DEBUG === 'true';
 
@@ -54,6 +55,8 @@ export async function runExample(
     });
 
     const swarm = new Swarm(client);
+
+    
     
     console.log(chalk.green(`Starting SwarmJS CLI with ${name} 🐝`));
     console.log(chalk.gray('Type your messages and press Enter. Press Ctrl+C to exit.\n'));
