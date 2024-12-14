@@ -4,7 +4,7 @@ import { MetaDagExecutionAgent } from '../../lib/agents/DagAgents';
 import { AgentFunction } from '../../core/types';
 
 async function create_greeting(names: string, timeOfDay: string): Promise<string> {
-    return `Good ${timeOfDay}, ${names}!`;
+    return `Good Jolly ${timeOfDay}, ${names}!`;
 }
 
 async function get_time_of_day(timeZone: string | { timeZone: string } = '+00:00'): Promise<string> {
