@@ -4,7 +4,7 @@ export function mergeFields(
   ): void {
     for (const [key, value] of Object.entries(source)) {
       if (typeof value === 'string') {
-        target[key] = (target[key] || '') + value;
+        target[key] = (target[key] ) + value;
       } else if (value !== null && typeof value === 'object') {
         target[key] = target[key] || {};
         mergeFields(target[key], value);

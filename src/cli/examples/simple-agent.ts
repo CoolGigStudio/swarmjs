@@ -1,5 +1,5 @@
 import { runExample } from '../repl';
-import { Agent } from '../../core/types';
+import { Agent } from '../../core/openai-types';
 import chalk from 'chalk';
 
 async function create_greeting(names: string, timeOfDay: string): Promise<string> {

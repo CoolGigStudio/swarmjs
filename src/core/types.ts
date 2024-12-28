@@ -1,31 +1,66 @@
-import { z } from 'zod';
-import { ChatCompletionToolChoiceOption } from 'openai/resources/chat/completions';
+// types.ts
+export interface Message {
+    role: 'user' | 'assistant' | 'system' | 'tool';
+    content: string;
+    tool_calls?: ToolCall[];
+    tool_call_id?: string;
+}
 
-export type AgentFunction = (...args: any[]) => Promise<string | Agent | Record<string, any>>;
+export interface ToolCall {
+    id: string;
+    type: string;
+    function: {
+        name: string;
+        arguments: Record<string, any>;
+    };
+}
 
-export const AgentSchema = z.object({
-  name: z.string().default('Agent'),
-  model: z.string().default('gpt-4'),
-  instructions: z.union([z.string(), z.function()]).default('You are a helpful agent.'),
-  functions: z.array(z.custom<AgentFunction>()).default([]),
-  toolChoice: z.custom<ChatCompletionToolChoiceOption>().nullable().default(null),
-  parallelToolCalls: z.boolean().default(true)
-});
+export interface AgentConfig {
+    name: string;
+    instructions: string;
+    tools: ToolDefinition[];
+    model: string;
+    provider_type: ProviderType;
+}
 
-export type Agent = z.infer<typeof AgentSchema>;
+export interface ToolDefinition {
+    name: string;
+    description: string;
+    parameters: {
+        type: string;
+        properties: Record<string, any>;
+        required?: string[];
+    };
+}
 
-export const ResponseSchema = z.object({
-  messages: z.array(z.any()).default([]),
-  agent: AgentSchema.nullable().default(null),
-  contextVariables: z.record(z.any()).default({})
-});
+export enum ProviderType {
+    ANTHROPIC = 'anthropic',
+    OPENAI_CHAT = 'openai_chat',
+    OPENAI_ASSISTANT = 'openai_assistant'
+}
 
-export type Response = z.infer<typeof ResponseSchema>;
+export interface AgentTransition {
+    to_agent: string;
+    payload: Record<string, any>;
+    preserve_memory: boolean;
+    preserve_context: boolean;
+}
 
-export const ResultSchema = z.object({
-  value: z.string().default(''),
-  agent: AgentSchema.nullable().default(null),
-  contextVariables: z.record(z.any()).default({})
-});
+export interface TaskResult {
+    task_id: string;
+    result: any;
+    transition?: AgentTransition;
+    metadata?: Record<string, any>;
+}
 
-export type Result = z.infer<typeof ResultSchema>;
+export interface CompletionResult {
+    messages: Message[];
+    isComplete: boolean;
+    transition?: AgentTransition;
+}
+
+export interface ToolResult {
+    tool_id: string;
+    result: any;
+    metadata?: Record<string, any>;
+}

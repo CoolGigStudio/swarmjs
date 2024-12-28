@@ -1,4 +1,4 @@
-import { Agent, AgentFunction } from "../../core/types";
+import { Agent, AgentFunction } from "../../core/openai-types";
 import {
     DAG_CREATION_INSTRUCTIONS,
     DAG_EXECUTION_INSTRUCTIONS,

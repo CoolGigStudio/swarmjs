@@ -33,7 +33,7 @@ export function functionToJson(func: Function): ChatCompletionTool {
 
   const functionDefinition: FunctionDefinition = {
     name: func.name,
-    description: (func as any).description || '',
+    description: (func as any).description ,
     parameters
   };
 

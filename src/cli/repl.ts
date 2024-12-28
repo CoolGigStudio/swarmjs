@@ -1,9 +1,9 @@
 import 'dotenv/config';
 import { createInterface } from 'readline';
 import chalk from 'chalk';
-import { Swarm } from '../core/swarm';
+import { Swarm } from '../core/swarm_backup';
 import OpenAI from 'openai';
-import { Agent } from '../core/types';
+import { Agent } from '../core/openai-types';
 
 const DEBUG = process.env.DEBUG === 'true';
 
