@@ -27,7 +27,7 @@
     "chatgpt",
     "agents"
   ],
-  "author": "",
+  "author": "NeuralNets Technologies LLC",
   "license": "MIT",
   "dependencies": {
     "chalk": "^4.1.2",

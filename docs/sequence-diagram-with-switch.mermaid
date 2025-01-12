@@ -1,0 +1,41 @@
+sequenceDiagram
+    participant C as Client
+    participant GS as GptSwarm
+    participant OAI as OpenAI API
+    participant T as Tools
+    participant A as Agents
+
+    C->>+GS: runSession(flowId, input)
+    GS->>+OAI: Create Message
+    OAI-->>-GS: Message Created
+    GS->>+OAI: Create Run
+    OAI-->>-GS: Run Created
+
+    loop Execute Run
+        GS->>+OAI: Check Run Status (threads.runs.retrieve)
+        OAI-->>-GS: Status
+        
+        alt requires_action
+            GS->>+T: Handle Tool Calls
+            
+            alt switchAgent call
+                T->>+A: Switch Agent Request
+                Note over T,A: Creates switch instruction with new agent context
+                A-->>-T: Switch Response
+                T-->>GS: AGENT_SWITCH Response
+                GS->>GS: Update Current Agent
+                Note over GS: Update flow.agentName
+            else other tool calls
+                T-->>GS: Tool Results
+            end
+
+            GS->>OAI: Submit Tool Outputs
+        else completed
+            GS->>+OAI: Get Messages (threads.messages.list)
+            OAI-->>-GS: Final Messages
+        else failed/expired/cancelled
+            Note over GS: Throw SwarmError
+        end
+    end
+
+    GS-->>-C: Session Result
