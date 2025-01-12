@@ -1,0 +1,71 @@
+classDiagram
+    class Swarm {
+        <<interface>>
+        +init(config: SwarmConfig)
+        +run(agentName: string, goal: string)
+        +createSession(agentName: string)
+        +runSession(flowId: string, userInput: string, options?)
+        +endSession(flowId: string)
+        +getStatus(flowId: string)
+        +runBatch(runs[], options?)
+    }
+    
+    class GptSwarm {
+        -client: OpenAI
+        -swarmAssistant: SwarmAssistantData
+        -flows: Map<string, FlowData>
+        -config: SwarmConfig
+        -max_turns: number
+        +init(config: SwarmConfig)
+        +run(agentName: string, goal: string)
+        +createSession(agentName: string)
+        +runSession(flowId: string, userInput: string, options?)
+        +endSession(flowId: string)
+        +getStatus(flowId: string)
+        +runBatch(runs[], options?)
+        -buildSystemMessage(agents: AgentConfig[])
+        -addBuiltinTools(tools: ToolDefinition[])
+        -handleToolCall(toolCall, currentAgent)
+        -executeRun(thread, run, currentAgent)
+    }
+
+    class SwarmConfig {
+        +id: string
+        +agents: AgentConfig[]
+        +tools: ToolDefinition[]
+        +model: string
+        +planningModel: string
+        +apiKey: string
+        +script: string
+        +options: object
+    }
+
+    class AgentConfig {
+        +name: string
+        +description: string
+        +systemMessage: string
+        +allowedTools: string[]
+        +model: string
+        +config: object
+    }
+
+    class ToolDefinition {
+        +type: string
+        +function: FunctionDefinition
+        +handler: function
+        +examples: string[]
+    }
+
+    class Flow {
+        +id: string
+        +agentName: string
+        +nodeResults: object
+        +createdAt: Date
+        +metadata: object
+    }
+
+    Swarm <|.. GptSwarm : implements
+    GptSwarm o-- SwarmConfig : contains
+    GptSwarm o-- Flow : manages
+    SwarmConfig o-- AgentConfig : contains
+    SwarmConfig o-- ToolDefinition : contains

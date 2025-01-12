@@ -1,0 +1,65 @@
+stateDiagram-v2
+    [*] --> Uninitialized
+    
+    Uninitialized --> Initialized: init(config)
+    note right of Initialized
+        Assistant created
+        Tools registered
+        Agents configured
+    end note
+
+    Initialized --> ThreadCreated: createSession()
+    ThreadCreated --> MessageCreated: runSession()
+    MessageCreated --> RunStarted: threads.runs.create
+    
+    state RunExecution {
+        [*] --> CheckingStatus: threads.runs.retrieve
+        
+        CheckingStatus --> RequiresAction: status === 'requires_action'
+        CheckingStatus --> Completed: status === 'completed'
+        CheckingStatus --> Failed: status === 'failed'
+        CheckingStatus --> Expired: status === 'expired'
+        CheckingStatus --> Cancelled: status === 'cancelled'
+        
+        state RequiresAction {
+            [*] --> ProcessingToolCall
+            ProcessingToolCall --> RegularToolExecution: regular tool
+            ProcessingToolCall --> AgentSwitching: switchAgent tool
+            
+            AgentSwitching --> ValidateNewAgent: parse args
+            ValidateNewAgent --> UpdateAgent: agent exists
+            ValidateNewAgent --> AgentError: agent not found
+            
+            UpdateAgent --> SubmitToolOutput
+            RegularToolExecution --> SubmitToolOutput
+            
+            SubmitToolOutput --> [*]
+        }
+        
+        RequiresAction --> CheckingStatus: after tool execution
+        
+        state Completed {
+            [*] --> FetchingMessages
+            FetchingMessages --> ProcessingResult
+            ProcessingResult --> [*]
+        }
+        
+        Failed --> [*]: throw SwarmError
+        Expired --> [*]: throw SwarmError
+        Cancelled --> [*]: throw SwarmError
+    }
+    
+    RunExecution --> ThreadDeletion: endSession()
+    ThreadDeletion --> [*]: thread deleted
+
+    note right of RegularToolExecution
+        Verify tool access
+        Execute tool handler
+        Handle tool errors
+    end note
+
+    note right of AgentSwitching
+        Create switch instructions
+        Update current agent
+        Prepare handoff context
+    end note
