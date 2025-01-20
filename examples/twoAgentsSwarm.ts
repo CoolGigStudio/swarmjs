@@ -5,6 +5,15 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 async function main(): Promise<void> {
+  // Get command line argument
+  const args = process.argv.slice(2);
+  const mode = args[0]?.toLowerCase() || 'session';
+
+  if (mode !== 'session' && mode !== 'runonce') {
+    console.error('Usage: ts-node twoAgentsSwarm.ts [session|runonce]');
+    process.exit(1);
+  }
+
   // Simple tools that are easy to verify
   const tools: ToolDefinition[] = [
     {
@@ -133,6 +142,9 @@ async function main(): Promise<void> {
     model: 'gpt-4o',
     apiKey: process.env.OPENAI_API_KEY,
     planningModel: 'o1-mini', //'gpt-4o', //'o1-mini',
+    options: {
+      saveDags: process.env.SAVE_DAGS === 'true',
+    },
   };
 
   try {
@@ -140,39 +152,73 @@ async function main(): Promise<void> {
     const swarm = new GptSwarm();
     await swarm.init(config);
 
-    console.log('Creating session...');
-    const flow = await swarm.createSession('Encoder');
+    if (mode === 'session') {
+      console.log('\nRunning with session mode...');
+      console.log('Creating session...');
+      const flow = await swarm.createSession('Encoder');
 
-    console.log('Executing script...');
-    const response = await swarm.runSession(
-      flow.id,
-      'Process the following inputText: "Hello123, World!!!"',
-      {
-        script: `
-            # Text Encoding and Cleanup
-            $1 = encode(text: "Hello123, World!!!")
-            $2 = cleanup(text: $1)
+      console.log('Executing script...');
+      const response = await swarm.runSession(
+        flow.id,
+        'Process the following inputText: "Hello123, World!!!"',
+        {
+          script: `                                                                                                                                       
+          # Encoding Phase                                                                                                                            
+          $1 = encode(text: "Hello123, World!!!")                                                                                                     
+                                                                                                                                                      
+          # Cleanup Phase                                                                                                                             
+          $2 = cleanup(text: $1)                                                                                                                      
+                                                                                                                                                      
+          # Agent Switching                                                                                                                           
+          $3 = switchAgent(agentName: "Decoder", currentStepNu                                                                                        
+  mber: "$2", lastOutput: $2)                                                                                                                         
+                                                                                                                                                      
+          # Decoding Phase                                                                                                                            
+          $4 = decode(text: $2)                                                                                                                       
+                                                                                                                                                      
+          # Summarization Phase                                                                                                                       
+          $5 = summarize(text: $4)                                                                                                                    
+                                                                                                                                                      
+          # Error Handling                                                                                                                            
+          $6 = handleErrors(process: $5)ByLLM                                                                                                         
+      `,
+        }
+      );
 
-            # Agent Switching
-            $3 = switchAgent(agentName: "Decoder")
+      console.log('Process completed successfully');
+      console.log('Final Result:', response);
 
-            # Text Decoding
-            $4 = decode(text: $2)
+      console.log('Cleaning up...');
+      await swarm.endSession(flow.id);
+    } else {
+      console.log('\nRunning with runOnce mode...');
+      const response = await swarm.runOnce(
+        'Encoder',
+        'Process the following inputText: "Testing456, RunOnce!!!"',
+        {
+          script: `
+              # Text Encoding and Cleanup
+              $1 = encode(text: "Testing456, RunOnce!!!")
+              $2 = cleanup(text: $1)
 
-            # Summarization by LLM
-            $5 = summarize_ByLLM(text: $4)
+              # Agent Switching
+              $3 = switchAgent(agentName: "Decoder")
 
-            # Error Handling
-            $6 = handleErrors_ByLLM(step: $5)
-        `,
-      }
-    );
+              # Text Decoding
+              $4 = decode(text: $2)
 
-    console.log('Process completed successfully');
-    console.log('Final Result:', response);
+              # Summarization by LLM
+              $5 = summarize_ByLLM(text: $4)
 
-    console.log('Cleaning up...');
-    await swarm.endSession(flow.id);
+              # Error Handling
+              $6 = handleErrors_ByLLM(step: $5)
+          `,
+        }
+      );
+
+      console.log('RunOnce completed successfully');
+      console.log('RunOnce Result:', response);
+    }
   } catch (error) {
     console.error('Detailed error information:');
     if (error instanceof Error) {

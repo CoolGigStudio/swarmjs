@@ -58,6 +58,7 @@ export interface SwarmConfig {
     maxConcurrentSessions?: number;
     toolTimeout?: number;
     debug?: boolean;
+    saveDags?: boolean;
   };
 }
 
@@ -73,7 +74,7 @@ export interface Flow {
 /** Main framework interface */
 export interface Swarm {
   init(config: SwarmConfig): Promise<void>;
-  run(agentName: string, goal: string): Promise<ToolResult>;
+  runOnce(agentName: string, goal: string): Promise<ToolResult>;
   createSession(agentName: string): Promise<Flow>;
   runSession(
     flowId: string,

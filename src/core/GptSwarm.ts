@@ -1,5 +1,6 @@
 import { OpenAI } from 'openai';
 import crypto from 'crypto';
+import fs from 'fs';
 import {
   Swarm,
   SwarmConfig,
@@ -16,6 +17,7 @@ import {
   DEFAULT_AGENT_SYSTEM_MESSAGE,
   PLANNING_PROMPT,
 } from './prompts';
+import dagStorage from '../tools/DAGStorage';
 
 interface SwarmAssistantData {
   assistant: OpenAI.Beta.Assistant;
@@ -359,9 +361,52 @@ export class GptSwarm implements Swarm {
   }
 
   /**
+   * Helper function to handle common run logic
+   */
+  private async handleRun(
+    threadId: string,
+    agentName: string,
+    goal: string,
+    options: { script?: string } = {}
+  ): Promise<string> {
+    if (!this.swarmAssistant)
+      throw new SwarmError('Assistant not initialized', 'INITIALIZATION_ERROR');
+
+    if (!options.script) {
+      options.script = await this.generateScript(goal);
+    }
+
+    let message = goal;
+    if (options?.script) {
+      message = `${goal}\n\nExecute this script:\n${options.script}`;
+      this.config.script = options.script;
+    }
+    console.log('message:', message);
+
+    await this.client.beta.threads.messages.create(threadId, {
+      role: 'user',
+      content: this.buildAgentMessage(agentName, message),
+    });
+
+    const run = await this.client.beta.threads.runs.create(threadId, {
+      assistant_id: this.swarmAssistant.assistant.id,
+    });
+
+    return await this.executeRun(
+      { id: threadId } as OpenAI.Beta.Thread,
+      run,
+      agentName
+    );
+  }
+
+  /**
    * Execute a one-shot interaction
    */
-  async run(agentName: string, goal: string): Promise<string> {
+  async runOnce(
+    agentName: string,
+    goal: string,
+    options: { script?: string; continueFromPrevious?: boolean } = {}
+  ): Promise<string> {
     if (!this.swarmAssistant)
       throw new SwarmError('Assistant not initialized', 'INITIALIZATION_ERROR');
     if (!this.swarmAssistant.agents.has(agentName)) {
@@ -370,16 +415,7 @@ export class GptSwarm implements Swarm {
 
     try {
       const thread = await this.client.beta.threads.create();
-      await this.client.beta.threads.messages.create(thread.id, {
-        role: 'user',
-        content: this.buildAgentMessage(agentName, goal),
-      });
-
-      const run = await this.client.beta.threads.runs.create(thread.id, {
-        assistant_id: this.swarmAssistant.assistant.id,
-      });
-
-      const result = await this.executeRun(thread, run, agentName);
+      const result = await this.handleRun(thread.id, agentName, goal, options);
 
       // Clean up
       await this.client.beta.threads.del(thread.id);
@@ -422,71 +458,71 @@ export class GptSwarm implements Swarm {
     }
   }
 
+  private async generateScript(userInput: string): Promise<string> {
+    const agents = Array.from(this.swarmAssistant!.agents.values())
+      .map((agent) => JSON.stringify(agent))
+      .join(', ');
+    const tools = Array.from(this.swarmAssistant!.tools.values())
+      .map((tool) => JSON.stringify(tool))
+      .join(', ');
+    const toolsAllowedForAgents = Array.from(
+      this.swarmAssistant!.agents.values()
+    )
+      .map((agent) => `${agent.name}: [${agent.allowedTools.join(', ')}]`)
+      .join(', ');
+    const prompt = PLANNING_PROMPT.replace('{goal}', userInput)
+      .replace('{agents}', agents)
+      .replace('{tools}', tools)
+      .replace('{toolsAllowedForAgents}', toolsAllowedForAgents);
+
+    const model = this.config.planningModel || DEFAULT_PLANNING_MODEL;
+    const temperature = model === 'o1-mini' ? 1 : 0;
+    const response = await this.client.chat.completions.create({
+      temperature,
+      model,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const scriptContent = response.choices[0].message.content;
+    if (!scriptContent) {
+      throw new SwarmError(
+        'Failed to generate script from input',
+        'EXECUTION_ERROR'
+      );
+    }
+
+    if (this.config.options?.saveDags) {
+      await dagStorage.saveDag({
+        id: crypto.randomUUID(),
+        script: scriptContent,
+        metadata: {
+          goal: userInput,
+          model,
+          temperature,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return scriptContent;
+  }
+
   /**
-   * Continue an existing session
+   * Continue running an existing session
    */
   async runSession(
     flowId: string,
-    userInput: string,
+    goal: string,
     options: { script?: string; continueFromPrevious?: boolean } = {}
   ): Promise<string> {
     const flow = this.flows.get(flowId);
     if (!flow) throw new SwarmError(`Flow ${flowId} not found`, 'INVALID_FLOW');
 
-    if (options && !options.script) {
-      const agents = Array.from(this.swarmAssistant!.agents.values())
-        .map((agent) => JSON.stringify(agent))
-        .join(', ');
-      const tools = Array.from(this.swarmAssistant!.tools.values())
-        .map((tool) => JSON.stringify(tool))
-        .join(', ');
-      const toolsAllowedForAgents = Array.from(
-        this.swarmAssistant!.agents.values()
-      )
-        .map((agent) => `${agent.name}: [${agent.allowedTools.join(', ')}]`)
-        .join(', ');
-      const prompt = PLANNING_PROMPT.replace('{goal}', userInput)
-        .replace('{agents}', agents)
-        .replace('{tools}', tools)
-        .replace('{toolsAllowedForAgents}', toolsAllowedForAgents);
-      console.log('prompt:', prompt);
-      const model = this.config.planningModel || DEFAULT_PLANNING_MODEL;
-      const temperature = model === 'o1-mini' ? 1 : 0;
-      const response = await this.client.chat.completions.create({
-        temperature,
-        model,
-        messages: [{ role: 'user', content: prompt }],
-      });
-      const scriptContent = response.choices[0].message.content;
-      if (!scriptContent) {
-        throw new SwarmError(
-          'Failed to generate script from input',
-          'EXECUTION_ERROR'
-        );
-      }
-      options.script = scriptContent;
-      console.log('options.script:', options.script);
-    }
-
-    let message = userInput;
-    if (options?.script) {
-      message = `${userInput}\n\nExecute this script:\n${options.script}`;
-      this.config.script = options.script;
-    }
-    console.log('message:', message);
-    await this.client.beta.threads.messages.create(flow.threadId, {
-      role: 'user',
-      content: this.buildAgentMessage(flow.agentName, message),
-    });
-
-    const run = await this.client.beta.threads.runs.create(flow.threadId, {
-      assistant_id: this.swarmAssistant!.assistant.id,
-    });
-
-    const result = await this.executeRun(
-      { id: flow.threadId } as OpenAI.Beta.Thread,
-      run,
-      flow.agentName
+    const result = await this.handleRun(
+      flow.threadId,
+      flow.agentName,
+      goal,
+      options
     );
 
     // Update agent if switched
