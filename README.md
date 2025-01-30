@@ -12,17 +12,20 @@ Agentic framework inspired from OpenAI's swarm framework in Python for TypeScrip
 ## Setup
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/yourusername/swarmjs.git
 cd swarmjs
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
 
 3. Create a `.env` file in the root directory and add your OpenAI API key:
+
 ```bash
 OPENAI_API_KEY=your_api_key_here
 DEBUG=false  # Set to true for detailed logging
@@ -48,7 +51,9 @@ swarmjs/
 ## Available Examples
 
 ### 1. Simple Agent Example
+
 A basic implementation using a single agent to create customized greetings based on timezone:
+
 ```bash
 npm run example:simple-agent
 # or
@@ -56,7 +61,9 @@ ts-node examples/simple-agent.ts
 ```
 
 ### 2. DAG Swarm Example
+
 A more complex implementation using Directed Acyclic Graph (DAG) for planning and execution:
+
 ```bash
 npm run example:dag-swarm
 # or
@@ -81,13 +88,14 @@ DEBUG=true npm run example:simple-agent
 4. Add a new script to `package.json` for easy execution
 
 Example:
+
 ```typescript
 import { runExample } from '../repl';
 import { Agent } from '../core/types';
 
 // Define your agent and functions
 const myAgent: Agent = {
-    // Agent configuration
+  // Agent configuration
 };
 
 runExample('MyExample', () => myAgent);
@@ -96,16 +104,19 @@ runExample('MyExample', () => myAgent);
 ## Building the Project
 
 1. Build the TypeScript files:
+
 ```bash
 npm run build
 ```
 
 This will:
+
 - Type-check all files
 - Compile TypeScript to JavaScript
 - Output to the `dist` directory
 
 2. Run the built version:
+
 ```bash
 node dist/examples/simple-agent.js
 ```
@@ -200,3 +211,19 @@ MIT License - see LICENSE for details
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Access the DAG sqlite database
+
+You can access the DAG sqlite database by running the following command:
+
+## Open the database
+
+```bash
+sqlite3 dag.db
+```
+
+## Select all records from dags table
+
+```sqlite
+select \* from dags;
+```
