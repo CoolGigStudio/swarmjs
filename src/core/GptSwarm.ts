@@ -1,6 +1,6 @@
 import { OpenAI } from 'openai';
 import crypto from 'crypto';
-import fs from 'fs';
+
 import {
   Swarm,
   SwarmConfig,
@@ -458,7 +458,7 @@ export class GptSwarm implements Swarm {
     }
   }
 
-  private async generateScript(userInput: string): Promise<string> {
+  public async generateScript(goal: string): Promise<string> {
     const agents = Array.from(this.swarmAssistant!.agents.values())
       .map((agent) => JSON.stringify(agent))
       .join(', ');
@@ -470,13 +470,13 @@ export class GptSwarm implements Swarm {
     )
       .map((agent) => `${agent.name}: [${agent.allowedTools.join(', ')}]`)
       .join(', ');
-    const prompt = PLANNING_PROMPT.replace('{goal}', userInput)
+    const prompt = PLANNING_PROMPT.replace('{goal}', goal)
       .replace('{agents}', agents)
       .replace('{tools}', tools)
       .replace('{toolsAllowedForAgents}', toolsAllowedForAgents);
 
     const model = this.config.planningModel || DEFAULT_PLANNING_MODEL;
-    const temperature = model === 'o1-mini' ? 1 : 0;
+    const temperature = model === 'o1-mini' || model === 'o1' ? 1 : 0;
     const response = await this.client.chat.completions.create({
       temperature,
       model,
@@ -496,7 +496,7 @@ export class GptSwarm implements Swarm {
         id: crypto.randomUUID(),
         script: scriptContent,
         metadata: {
-          goal: userInput,
+          goal: goal,
           model,
           temperature,
         },
