@@ -5,7 +5,7 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-async function main() {
+async function main(): Promise<void> {
   try {
     // Get model type from command line args, default to GPT
     const modelType =
@@ -17,7 +17,7 @@ async function main() {
     const config: AIConfig = {
       apiKey:
         modelType === AIServiceType.CLAUDE
-          ? process.env.ANTHROPIC_API_KEY || ''
+          ? process.env.CLAUDE_API_KEY || ''
           : process.env.OPENAI_API_KEY || '',
       model:
         modelType === AIServiceType.CLAUDE
