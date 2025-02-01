@@ -476,7 +476,8 @@ export class GptSwarm implements Swarm {
       .replace('{toolsAllowedForAgents}', toolsAllowedForAgents);
 
     const model = this.config.planningModel || DEFAULT_PLANNING_MODEL;
-    const temperature = model === 'o1-mini' || model === 'o1' ? 1 : 0;
+    const temperature =
+      model === 'o1-mini' || model === 'o1' || model === 'o3-mini' ? 1 : 0;
     const response = await this.client.chat.completions.create({
       temperature,
       model,

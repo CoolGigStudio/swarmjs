@@ -194,7 +194,10 @@ const swarmConfig: SwarmConfig = {
   tools,
   model: 'gpt-4o',
   apiKey: process.env.OPENAI_API_KEY,
-  planningModel: 'gpt-4o',
+  planningModel: 'o3-mini',
+  options: {
+    saveDags: process.env.SAVE_DAGS === 'true',
+  },
 };
 
 async function main() {
