@@ -16,7 +16,7 @@ export const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export const twilioClient = new Twilio(
+const twilioClient = new Twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 );
@@ -24,7 +24,7 @@ export const twilioClient = new Twilio(
 // Database configurations
 export const customerDB = new Map([
   [
-    'auth_123',
+    '123',
     {
       name: 'John Doe',
       vehicle: 'Tesla Model 3',
@@ -32,7 +32,7 @@ export const customerDB = new Map([
     },
   ],
   [
-    'auth_456',
+    '456',
     {
       name: 'Jane Smith',
       vehicle: 'BMW X5',
@@ -48,13 +48,15 @@ export const appointmentSlots = new Map([
 ]);
 
 // Store active calls
-export const activeCalls = new Map<
-  string,
-  {
-    response: any;
-    resolve: (value: string) => void;
-  }
->();
+export interface ActiveCallData {
+  response?: any;
+  ttsAudio?: string;
+  msg?: string;
+  resolve: (value: string) => void;
+}
+
+// Then update your activeCalls map:
+export const activeCalls = new Map<string, ActiveCallData>();
 
 // Voice interaction tools
 export const voiceTools: ToolDefinition[] = [
@@ -62,41 +64,64 @@ export const voiceTools: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'customerChatVoice',
-      description: 'Interact with customer through voice',
+      description:
+        'Interact with the customer via voice. Generate TTS for the message and wait for the customer’s reply.',
       parameters: {
         type: 'object',
         properties: {
           message: {
             type: 'string',
-            description: 'Message to send to customer',
+            description: 'Message to send to the customer',
+          },
+          callSid: {
+            type: 'string',
+            description: 'Unique call identifier (Twilio CallSid)',
           },
         },
-        required: ['message'],
+        required: ['message', 'callSid'],
       },
     },
-    handler: async (
-      params: Record<string, ToolParameter>
-    ): Promise<ToolResult> => {
+    handler: async (params: Record<string, any>): Promise<string> => {
       const message = String(params.message);
+      const callSid = String(params.callSid);
 
-      // Convert message to speech
+      console.log(
+        'Generating TTS audio for message after the tool call:',
+        message
+      );
+      console.log('CallSid after the tool call:', callSid);
+      // // Generate TTS audio (for example using OpenAI’s TTS endpoint)
       const mp3Response = await openai.audio.speech.create({
         model: 'tts-1',
         voice: 'alloy',
         input: message,
       });
-
       const buffer = Buffer.from(await mp3Response.arrayBuffer());
-      const audioContent = buffer.toString('base64');
 
-      // Return a Promise that will be resolved when the customer responds
+      const ttsAudio = buffer.toString('base64');
+
+      // const ttsAudio = Buffer.from('This is a debug message').toString(
+      //   'base64'
+      // );
+
+      // Store the latest TTS audio for this call.
+      // Also, prepare a promise that will eventually resolve with the customer’s transcribed reply.
+      activeCalls.set(callSid, {
+        ttsAudio, // save the TTS message to play in the webhook
+        resolve: () => {}, // placeholder; will be overwritten immediately below
+      });
+
+      console.log('Debug: TTS audio!');
+      // Return a promise that will be resolved when the customer responds.
       return new Promise((resolve) => {
-        const currentCall = activeCalls.keys().next().value;
-        if (currentCall) {
-          activeCalls.set(currentCall, {
-            response: audioContent,
-            resolve,
-          });
+        // Update the activeCalls entry with the real resolve function.
+        const callData = activeCalls.get(callSid);
+        if (callData) {
+          console.log('Debug: Resolving the promise!');
+          callData.resolve = resolve;
+        } else {
+          // In the unlikely case the call wasn’t registered, do it now.
+          activeCalls.set(callSid, { ttsAudio, resolve });
         }
       });
     },
@@ -223,7 +248,7 @@ export const voiceServiceAgent: AgentConfig = {
 export const swarmConfig: SwarmConfig = {
   agents: [voiceServiceAgent],
   tools: voiceTools,
-  model: 'gpt-4',
+  model: 'gpt-4o',
   apiKey: process.env.OPENAI_API_KEY,
-  planningModel: 'gpt-4',
+  planningModel: 'gpt-4o',
 };

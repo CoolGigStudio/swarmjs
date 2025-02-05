@@ -83,6 +83,7 @@ export class GptSwarm implements Swarm {
         tools: toolsMap,
       };
     } catch (error) {
+      console.error('Error initializing GptSwarm:', error);
       throw new SwarmError(
         'Failed to initialize GptSwarm',
         'INITIALIZATION_ERROR',
