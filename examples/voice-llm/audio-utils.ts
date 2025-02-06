@@ -41,15 +41,41 @@ export function encodeMuLaw(pcmBuffer: BufferLike): Buffer {
   return muLawBuffer;
 }
 
-/**
- * Resample PCM audio from one sample rate to another using Sox
- */
+export function isBufferSilent(buffer: BufferLike): boolean {
+  // Lowering the threshold to detect more speech
+  const threshold = 25; // Reduced from 50
+
+  // Only check a sample of the buffer for performance
+  const samplingRate = 4; // Check every 4th sample
+  let totalSamples = 0;
+  let silentSamples = 0;
+
+  for (let i = 0; i < buffer.length; i += 2 * samplingRate) {
+    totalSamples++;
+    const sample = Math.abs((buffer as Buffer).readInt16LE(i));
+    if (sample <= threshold) {
+      silentSamples++;
+    }
+  }
+
+  // Consider it silent if 90% of samples are below threshold
+  return silentSamples / totalSamples > 0.9;
+}
+
 export function resamplePCM(
   inputBuffer: BufferLike,
   inputRate: number,
   outputRate: number
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    if (!inputBuffer || inputBuffer.length < 2) {
+      return resolve(Buffer.alloc(0));
+    }
+
+    if (isBufferSilent(inputBuffer)) {
+      return resolve(Buffer.alloc(inputBuffer.length));
+    }
+
     const process = spawn('sox', [
       '-t',
       'raw',
@@ -73,18 +99,34 @@ export function resamplePCM(
       '-e',
       'signed-integer',
       '-',
+      'gain',
+      '-3', // Just apply a simple gain reduction
     ]);
 
     let outputBuffer = Buffer.alloc(0);
+
     process.stdout.on('data', (chunk) => {
       outputBuffer = Buffer.concat([outputBuffer, chunk]);
     });
 
     process.stdout.on('end', () => resolve(outputBuffer));
-    process.stderr.on('data', (err) =>
-      console.error('Sox error:', err.toString())
-    );
-    process.on('error', reject);
+
+    process.stderr.on('data', (err) => {
+      const errorMsg = err.toString();
+      // Only log actual errors, not warnings
+      if (
+        !errorMsg.includes('sox: Not enough input filenames specified') &&
+        !errorMsg.includes('WARN rate') &&
+        !errorMsg.includes('WARN dither')
+      ) {
+        console.error('Sox error:', errorMsg);
+      }
+    });
+
+    process.on('error', (err) => {
+      console.error('Sox process error:', err);
+      reject(err);
+    });
 
     process.stdin.write(inputBuffer);
     process.stdin.end();
