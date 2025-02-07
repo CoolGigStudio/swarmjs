@@ -3,20 +3,28 @@ import { createServer } from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
 import { config } from 'dotenv';
 import VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
-import {
-  decodeMuLaw,
-  encodeMuLaw,
-  resamplePCM,
-  isBufferSilent,
-} from './audio-utils';
 
 config();
+
+const SYSTEM_MESSAGE =
+  'You are a helpful AI assistant who loves to chat about anything the user is interested about and is prepared to offer them facts.';
+const VOICE = 'alloy';
+const LOG_EVENT_TYPES = [
+  'response.content.done',
+  'rate_limits.updated',
+  'response.done',
+  'input_audio_buffer.committed',
+  'input_audio_buffer.speech_stopped',
+  'input_audio_buffer.speech_started',
+  'session.created',
+];
 
 const app = express();
 const port = process.env.PORT || 3000;
 app.use(express.json());
 
 app.post('/incoming-call', (req, res) => {
+  console.log('Incoming call received');
   try {
     const response = new VoiceResponse();
     const connect = response.connect();
@@ -33,19 +41,12 @@ app.post('/incoming-call', (req, res) => {
 });
 
 const server = createServer(app);
+
 const twilioWss = new WebSocketServer({ server });
 
 twilioWss.on('connection', (twilioWs) => {
   console.log('Twilio web socket connection established');
   let streamSid: string;
-  // Establish a WebSocket connection to OpenAI's Realtime API.
-  const openaiWs = new WebSocket(process.env.OPENAI_REALTIME_WS || '', {
-    headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      'openai-beta': 'realtime=v1',
-      'OpenAI-Organization': process.env.OPENAI_ORG || '',
-    },
-  });
 
   // Conversation history can be maintained if needed.
   // let conversationHistory: string[] = [];
@@ -56,10 +57,81 @@ twilioWss.on('connection', (twilioWs) => {
   // // Buffer for accumulating audio/text if needed.
   // let questionBuffer = '';
 
-  // When OpenAI connection is open, send a greeting and flush any queued messages.
+  // Establish a WebSocket connection to OpenAI's Realtime API.
+  const openaiWs = new WebSocket(process.env.OPENAI_REALTIME_WS || '', {
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      'openai-beta': 'realtime=v1',
+      'OpenAI-Organization': process.env.OPENAI_ORG || '',
+    },
+  });
+
+  const sendSessionUpdate = () => {
+    const sessionUpdate = {
+      type: 'session.update',
+      session: {
+        turn_detection: { type: 'server_vad' },
+        input_audio_format: 'g711_ulaw',
+        output_audio_format: 'g711_ulaw',
+        voice: VOICE,
+        instructions: SYSTEM_MESSAGE,
+        modalities: ['text', 'audio'],
+        temperature: 0.8,
+      },
+    };
+    console.log('Sending session update:', JSON.stringify(sessionUpdate));
+    openaiWs.send(JSON.stringify(sessionUpdate));
+  };
+
+  // Open event for OpenAI WebSocket
   openaiWs.on('open', () => {
-    console.log('Connected to OpenAI real-time API: ', openaiWs.readyState);
-    // Need to add more here.
+    console.log('Connected to the OpenAI Realtime API');
+    setTimeout(sendSessionUpdate, 250); // Ensure connection stability, send after .25 seconds
+  });
+
+  openaiWs.on('message', (data: WebSocket.RawData) => {
+    try {
+      let jsonString: string;
+      if (typeof data === 'string') {
+        jsonString = data;
+      } else if (data instanceof Buffer) {
+        jsonString = data.toString('utf-8');
+      } else if (data instanceof ArrayBuffer) {
+        jsonString = Buffer.from(data).toString('utf-8');
+      } else {
+        throw new Error('Unsupported data type');
+      }
+
+      const response = JSON.parse(jsonString);
+      if (LOG_EVENT_TYPES.includes(response.type)) {
+        console.log(`Received event: ${response.type}`, response);
+      }
+      if (response.type === 'session.updated') {
+        console.log('Session updated successfully:', response);
+      }
+      if (response.type === 'response.audio.delta' && response.delta) {
+        console.log('Received audio delta.');
+        const audioDelta = {
+          event: 'media',
+          streamSid: streamSid,
+          media: {
+            payload: Buffer.from(response.delta, 'base64').toString('base64'),
+          },
+        };
+        twilioWs.send(JSON.stringify(audioDelta));
+      }
+    } catch (error) {
+      console.error(
+        'Error processing OpenAI message:',
+        error,
+        'Raw message:',
+        data
+      );
+    }
+  });
+
+  openaiWs.on('error', (error) => {
+    console.error('WebSocket error:', error);
   });
 
   twilioWs.on('message', async (msg) => {
@@ -69,48 +141,30 @@ twilioWss.on('connection', (twilioWs) => {
       case 'start':
         streamSid = message.start.streamSid;
         console.log('Twilio stream started:', streamSid);
+
+        /* // Commit the real-time event to OpenAI after 10 seconds.
+        setTimeout(() => {
+          console.log('Committing real-time event to OpenAI');
+          if (openaiWs.readyState === WebSocket.OPEN) {
+            openaiWs.send(
+              JSON.stringify({
+                type: 'input_audio_buffer.commit',
+              })
+            );
+            openaiWs.send(JSON.stringify({ type: 'response.create' }));
+          }
+        }, 10000); */
         break;
 
       // In the message handler for 'media' event:
       // In the server.ts file, update the media event handler:
       case 'media':
-        try {
-          console.log(
-            'Received media payload, length:',
-            message.media.payload.length
-          );
-          const mulawBuffer = Buffer.from(message.media.payload, 'base64');
-          console.log('Decoded mulaw buffer length:', mulawBuffer.length);
-
-          const pcmAudio = decodeMuLaw(mulawBuffer);
-          console.log('Decoded PCM buffer length:', pcmAudio.length);
-
-          // Add debug log for silence detection
-          const isSilent = isBufferSilent(pcmAudio);
-          console.log('Is audio silent?', isSilent);
-
-          if (pcmAudio.length >= 2 && !isSilent) {
-            console.log('Processing non-silent audio...');
-            const pcm16k = await resamplePCM(pcmAudio, 8000, 16000);
-            console.log('Resampled PCM buffer length:', pcm16k.length);
-
-            if (openaiWs.readyState === WebSocket.OPEN && pcm16k.length > 0) {
-              console.log('Sending audio to OpenAI, length:', pcm16k.length);
-              openaiWs.send(pcm16k);
-            } else {
-              console.log('Not sending to OpenAI:', {
-                wsOpen: openaiWs.readyState === WebSocket.OPEN,
-                bufferLength: pcm16k.length,
-              });
-            }
-          } else {
-            console.log('Skipping audio processing:', {
-              bufferLength: pcmAudio.length,
-              isSilent,
-            });
-          }
-        } catch (err) {
-          console.error('Error processing audio:', err);
+        if (openaiWs.readyState === WebSocket.OPEN) {
+          const audioAppend = {
+            type: 'input_audio_buffer.append',
+            audio: message.media.payload,
+          };
+          openaiWs.send(JSON.stringify(audioAppend));
         }
         break;
 
@@ -118,29 +172,6 @@ twilioWss.on('connection', (twilioWs) => {
         console.log('Twilio stream stopped');
         openaiWs.close();
         break;
-    }
-  });
-
-  openaiWs.on('message', async (data: WebSocket.Data) => {
-    // Ensure data is a Buffer before processing
-    if (Buffer.isBuffer(data)) {
-      try {
-        // Convert AI-generated PCM 16kHz audio to µ-law for Twilio
-        const pcm8k = await resamplePCM(data as Buffer, 16000, 8000);
-        const mulawData = encodeMuLaw(pcm8k);
-
-        if (streamSid) {
-          twilioWs.send(
-            JSON.stringify({
-              event: 'media',
-              streamSid: streamSid,
-              media: { payload: mulawData.toString('base64') },
-            })
-          );
-        }
-      } catch (err) {
-        console.error('Error processing OpenAI audio:', err);
-      }
     }
   });
 

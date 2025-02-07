@@ -68,6 +68,7 @@ export function resamplePCM(
   outputRate: number
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    console.log('Resampling audio from', inputRate, 'to', outputRate);
     if (!inputBuffer || inputBuffer.length < 2) {
       return resolve(Buffer.alloc(0));
     }
@@ -75,6 +76,8 @@ export function resamplePCM(
     if (isBufferSilent(inputBuffer)) {
       return resolve(Buffer.alloc(inputBuffer.length));
     }
+
+    console.log('A1');
 
     const process = spawn('sox', [
       '-t',
@@ -127,8 +130,80 @@ export function resamplePCM(
       console.error('Sox process error:', err);
       reject(err);
     });
+    console.log('A2');
 
     process.stdin.write(inputBuffer);
     process.stdin.end();
+    console.log('A3');
   });
+}
+
+/**
+ * Resample PCM audio from 8kHz to 16kHz using linear interpolation
+ */
+export function resamplePCM4(
+  inputBuffer: BufferLike,
+  inputRate: number,
+  outputRate: number
+): Buffer {
+  if (inputRate === outputRate) {
+    return Buffer.from(inputBuffer);
+  }
+
+  const inputLength = inputBuffer.length / 2;
+  const outputLength = Math.floor(inputLength * (outputRate / inputRate));
+  const outputBuffer = Buffer.alloc(outputLength * 2);
+
+  for (let i = 0; i < outputLength; i++) {
+    const t = (i * (inputLength - 1)) / (outputLength - 1);
+    const i0 = Math.floor(t);
+    const i1 = Math.min(i0 + 1, inputLength - 1);
+    const sample0 = (inputBuffer as Buffer).readInt16LE(i0 * 2);
+    const sample1 = (inputBuffer as Buffer).readInt16LE(i1 * 2);
+    const sample = sample0 + (sample1 - sample0) * (t - i0);
+    outputBuffer.writeInt16LE(sample, i * 2);
+  }
+
+  return outputBuffer;
+}
+
+/**
+ * Converts PCM16 Buffer to Float32Array
+ */
+export function pcm16ToFloat32(pcm16Buffer: Buffer): Float32Array {
+  const float32Array = new Float32Array(pcm16Buffer.length / 2);
+  for (let i = 0; i < float32Array.length; i++) {
+    const int16 = pcm16Buffer.readInt16LE(i * 2);
+    float32Array[i] = int16 / 32768;
+  }
+  return float32Array;
+}
+
+/**
+ * Converts a Float32Array to base64-encoded PCM16 data
+ */
+export function base64EncodeAudio(float32Array: Float32Array): string {
+  const arrayBuffer = floatTo16BitPCM(float32Array);
+  let binary = '';
+  const bytes = new Uint8Array(arrayBuffer);
+  const chunkSize = 0x8000; // 32KB chunk size
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk as any);
+  }
+  return Buffer.from(binary, 'binary').toString('base64');
+}
+
+/**
+ * Converts Float32Array of audio data to PCM16 ArrayBuffer
+ */
+export function floatTo16BitPCM(float32Array: Float32Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(float32Array.length * 2);
+  const view = new DataView(buffer);
+  let offset = 0;
+  for (let i = 0; i < float32Array.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, float32Array[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return buffer;
 }
