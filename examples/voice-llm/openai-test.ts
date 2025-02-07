@@ -10,7 +10,7 @@ const API_URL = 'wss://api.openai.com/v1/realtime';
 const headers: Record<string, string> = {
   Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
   // Uncomment the following line only if your account requires it:
-  'OpenAI-Organization': process.env.OPENAI_ORG || '',
+  //'OpenAI-Organization': process.env.OPENAI_ORG || '',
 };
 
 console.log('Connecting to:', API_URL);

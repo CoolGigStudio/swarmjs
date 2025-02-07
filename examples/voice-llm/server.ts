@@ -76,6 +76,37 @@ twilioWss.on('connection', (twilioWs) => {
         voice: VOICE,
         instructions: SYSTEM_MESSAGE,
         modalities: ['text', 'audio'],
+        tools: [
+          {
+            type: 'function',
+            name: 'get_current_time',
+            description: 'Get the current time',
+            parameters: {
+              type: 'object',
+              properties: {
+                timezone: {
+                  type: 'string',
+                  description: 'The timezone to get the time in',
+                },
+              },
+            },
+          },
+          {
+            type: 'function',
+            name: 'get_current_weather',
+            description: 'Get the current weather for a specific city or area',
+            parameters: {
+              type: 'object',
+              properties: {
+                timezone: {
+                  type: 'string',
+                  description: 'The city or area to get the weather in',
+                },
+              },
+            },
+          },
+        ],
+        tool_choice: 'auto',
         temperature: 0.8,
       },
     };
