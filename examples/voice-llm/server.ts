@@ -1,5 +1,5 @@
 import express from 'express';
-import { createServer } from 'http';
+import { createServer, get } from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
 import { config } from 'dotenv';
 import VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
@@ -66,7 +66,7 @@ twilioWss.on('connection', (twilioWs) => {
     },
   });
 
-  const sendSessionUpdate = () => {
+  const sendSessionUpdate = (): void => {
     const sessionUpdate = {
       type: 'session.update',
       session: {
@@ -98,7 +98,7 @@ twilioWss.on('connection', (twilioWs) => {
             parameters: {
               type: 'object',
               properties: {
-                timezone: {
+                city: {
                   type: 'string',
                   description: 'The city or area to get the weather in',
                 },
@@ -134,6 +134,7 @@ twilioWss.on('connection', (twilioWs) => {
       }
 
       const response = JSON.parse(jsonString);
+      console.log(response.type);
       if (LOG_EVENT_TYPES.includes(response.type)) {
         console.log(`Received event: ${response.type}`, response);
       }
@@ -150,6 +151,38 @@ twilioWss.on('connection', (twilioWs) => {
           },
         };
         twilioWs.send(JSON.stringify(audioDelta));
+      }
+      if (response.type === 'response.output_item.done') {
+        const { item } = response;
+        if (item.type === 'function_call') {
+          if (item.name === 'get_current_weather') {
+            get_current_weather(JSON.parse(item.arguments)).then((weather) => {
+              const data = {
+                type: 'conversation.item.create',
+                item: {
+                  type: 'function_call_output',
+                  call_id: item.call_id,
+                  output: JSON.stringify(weather),
+                },
+              };
+              console.log('Sending weather:', data);
+              openaiWs.send(JSON.stringify(data));
+              openaiWs.send(JSON.stringify({ type: 'response.create' }));
+            });
+          }
+        }
+      }
+      if (response.type === 'response.done') {
+        console.log('Response done event received:', response);
+        if (
+          response.response.status === 'failed' &&
+          response.response.status_details
+        ) {
+          const errorDetails = JSON.stringify(
+            response.response.status_details.error
+          );
+          console.log('Error details:', errorDetails);
+        }
       }
     } catch (error) {
       console.error(
@@ -213,6 +246,12 @@ twilioWss.on('connection', (twilioWs) => {
     }
   });
 });
+
+const get_current_weather = async (arugments: any) => {
+  const { city } = arugments;
+  console.log('Getting weather for:', city);
+  return { weather: 'Stormy', temperature: '20C', city: city };
+};
 
 server.listen(port, () => {
   console.log(`Server running on port ${port}`);
