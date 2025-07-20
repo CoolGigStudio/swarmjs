@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Debt Collection Call System</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      h1 {
+        color: #2c3e50;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .form-container {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 16px;
+      }
+      textarea {
+        height: 100px;
+      }
+      button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        display: block;
+        width: 100%;
+      }
+      button:hover {
+        background-color: #2980b9;
+      }
+      #status {
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 4px;
+        display: none;
+      }
+      .success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .error {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .call-history {
+        margin-top: 30px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+      th,
+      td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+      th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+      }
+      tr:hover {
+        background-color: #f5f5f5;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Debt Collection Call System</h1>
+
+    <div class="form-container">
+      <form id="callForm">
+        <div class="form-group">
+          <label for="customerName">Customer Name:</label>
+          <input
+            type="text"
+            id="customerName"
+            name="customerName"
+            value="John Doe"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="phoneNumber">Phone Number:</label>
+          <input
+            type="tel"
+            id="phoneNumber"
+            name="phoneNumber"
+            value="+16175847925"
+            placeholder="+1XXXXXXXXXX"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="customerProfile">Customer Profile / Notes:</label>
+          <textarea id="customerProfile" name="customerProfile"></textarea>
+        </div>
+
+        <button type="submit">Initiate Call</button>
+      </form>
+    </div>
+
+    <div id="status"></div>
+
+    <div class="call-history">
+      <h2>Recent Calls</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Customer</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th>Call SID</th>
+          </tr>
+        </thead>
+        <tbody id="callHistoryBody">
+          <!-- Call history will be added here dynamically -->
+        </tbody>
+      </table>
+    </div>
+
+    <script>
+      document
+        .getElementById('callForm')
+        .addEventListener('submit', async function (e) {
+          e.preventDefault();
+
+          const statusDiv = document.getElementById('status');
+          statusDiv.textContent = 'Initiating call...';
+          statusDiv.className = '';
+          statusDiv.style.display = 'block';
+
+          const formData = {
+            customerName: document.getElementById('customerName').value,
+            phoneNumber: document.getElementById('phoneNumber').value,
+            customerProfile: document.getElementById('customerProfile').value,
+          };
+
+          try {
+            const response = await fetch('/start-call', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(formData),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+              statusDiv.textContent = `Call initiated successfully! Call SID: ${data.callSid}`;
+              statusDiv.className = 'success';
+
+              // Add to call history
+              addToCallHistory({
+                time: new Date().toLocaleTimeString(),
+                customer: formData.customerName,
+                phone: formData.phoneNumber,
+                status: 'Initiated',
+                callSid: data.callSid,
+              });
+
+              // Reset form
+              document.getElementById('callForm').reset();
+
+              // Reset the default values after form reset
+              document.getElementById('customerName').value = 'John Doe';
+              document.getElementById('phoneNumber').value = '+16175847925';
+            } else {
+              statusDiv.textContent = `Error: ${data.error || 'Unknown error'}`;
+              statusDiv.className = 'error';
+            }
+          } catch (error) {
+            statusDiv.textContent = `Error: ${error.message}`;
+            statusDiv.className = 'error';
+            console.error('Error:', error);
+          }
+        });
+
+      function addToCallHistory(call) {
+        const tbody = document.getElementById('callHistoryBody');
+        const row = document.createElement('tr');
+
+        row.innerHTML = `
+                <td>${call.time}</td>
+                <td>${call.customer}</td>
+                <td>${call.phone}</td>
+                <td>${call.status}</td>
+                <td>${call.callSid}</td>
+            `;
+
+        // Insert at the top of the table
+        if (tbody.firstChild) {
+          tbody.insertBefore(row, tbody.firstChild);
+        } else {
+          tbody.appendChild(row);
+        }
+      }
+    </script>
+  </body>
+</html>

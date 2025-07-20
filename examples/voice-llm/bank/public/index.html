@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bank of Fremont</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f8f9fa;
+        padding-top: 20px;
+      }
+      .navbar-brand {
+        font-weight: 600;
+        color: #003366;
+      }
+      .card {
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        transition: transform 0.3s;
+      }
+      .card:hover {
+        transform: translateY(-5px);
+      }
+      .card-header {
+        background-color: #003366;
+        color: white;
+        border-radius: 10px 10px 0 0 !important;
+        font-weight: 600;
+      }
+      .btn-primary {
+        background-color: #003366;
+        border-color: #003366;
+      }
+      .btn-primary:hover {
+        background-color: #002244;
+        border-color: #002244;
+      }
+      #payBillForm,
+      #paymentSuccess {
+        display: none;
+      }
+      .main-content {
+        min-height: 70vh;
+      }
+      #assistantMessage {
+        display: none;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 10px;
+        background-color: #d1ecf1;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
+      }
+      #connectionStatus {
+        position: fixed;
+        bottom: 10px;
+        right: 10px;
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        opacity: 0.8;
+        z-index: 1000;
+        display: none;
+      }
+      .connected {
+        background-color: #d4edda;
+        color: #155724;
+      }
+      .disconnected {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="connectionStatus"></div>
+
+    <div class="container">
+      <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container-fluid">
+          <a class="navbar-brand" href="/index">Bank of Fremont</a>
+          <button
+            class="navbar-toggler"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#navbarNav"
+          >
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+              <li class="nav-item">
+                <a class="nav-link active" href="/index">Home</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="#" id="navPayBills">Pay Bills</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="#">Account</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="#">Support</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Assistant Message -->
+      <div id="assistantMessage" class="alert">
+        <strong>Virtual Assistant:</strong>
+        <span id="assistantMessageText"
+          >I've prepared a bill payment form for you. Please complete the form
+          below with the recipient and amount information.</span
+        >
+      </div>
+
+      <div class="main-content">
+        <!-- Welcome Screen -->
+        <div id="welcomeScreen">
+          <div class="jumbotron bg-light p-5 rounded">
+            <h1 class="display-4">Welcome to Bank of Fremont!</h1>
+            <p class="lead">Serving our community with pride since 1964.</p>
+            <hr class="my-4" />
+            <p>
+              Choose from our services below or contact our customer service for
+              assistance.
+            </p>
+          </div>
+
+          <div class="row mt-4">
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header">Account Management</div>
+                <div class="card-body">
+                  <h5 class="card-title">Check Your Balance</h5>
+                  <p class="card-text">
+                    View your current balance, recent transactions, and account
+                    details.
+                  </p>
+                  <button class="btn btn-primary">View Accounts</button>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header">Bill Payment</div>
+                <div class="card-body">
+                  <h5 class="card-title">Pay Your Bills</h5>
+                  <p class="card-text">
+                    Pay bills online quickly and securely from your bank
+                    account.
+                  </p>
+                  <button class="btn btn-primary" id="payBillsBtn">
+                    Pay Bills
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header">Branch Locations</div>
+                <div class="card-body">
+                  <h5 class="card-title">Find Our Branches</h5>
+                  <p class="card-text">
+                    Locate the nearest Bank of Fremont branch and ATMs.
+                  </p>
+                  <button class="btn btn-primary">Find Branches</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pay Bill Form -->
+        <div id="payBillForm" class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Pay Bills</h5>
+          </div>
+          <div class="card-body">
+            <form id="billPaymentForm">
+              <div class="mb-3">
+                <label for="customerName" class="form-label"
+                  >Customer Name</label
+                >
+                <input
+                  type="text"
+                  class="form-control"
+                  id="customerName"
+                  readonly
+                />
+              </div>
+              <div class="mb-3">
+                <label for="accountNumber" class="form-label"
+                  >Account Number</label
+                >
+                <input
+                  type="text"
+                  class="form-control"
+                  id="accountNumber"
+                  readonly
+                />
+              </div>
+              <div class="mb-3">
+                <label for="billRecipient" class="form-label">Pay To</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="billRecipient"
+                  placeholder="Enter recipient name"
+                  required
+                />
+              </div>
+              <div class="mb-3">
+                <label for="billAmount" class="form-label">Amount</label>
+                <div class="input-group">
+                  <span class="input-group-text">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    class="form-control"
+                    id="billAmount"
+                    placeholder="Enter amount"
+                    required
+                  />
+                </div>
+              </div>
+              <div class="mb-3">
+                <label for="billDate" class="form-label">Payment Date</label>
+                <input
+                  type="date"
+                  class="form-control"
+                  id="billDate"
+                  required
+                />
+              </div>
+              <div class="text-end">
+                <button
+                  type="button"
+                  class="btn btn-secondary me-2"
+                  id="cancelPayment"
+                >
+                  Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  Submit Payment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Payment Success -->
+        <div id="paymentSuccess" class="card">
+          <div class="card-header bg-success text-white">
+            <h5 class="mb-0">Payment Successful!</h5>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-success">
+              <h4>Thank you for your payment</h4>
+              <p id="successMessage"></p>
+              <p>Transaction ID: <span id="transactionId"></span></p>
+              <p>Date: <span id="transactionDate"></span></p>
+            </div>
+            <div class="text-center mt-4">
+              <button class="btn btn-primary" id="returnHome">
+                Return to Home
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="mt-4 py-3 bg-light text-center">
+        <p>© 2025 Bank of Fremont. All rights reserved.</p>
+        <p>For customer service, call: (510) 555-0123</p>
+      </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        console.log('Page loaded, initializing...');
+        const urlParams = new URLSearchParams(window.location.search);
+        const action = urlParams.get('action');
+        const sessionId = urlParams.get('sessionId');
+        console.log('URL parameters:', { action, sessionId });
+
+        let clientId =
+          localStorage.getItem('clientId') ||
+          `client-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        localStorage.setItem('clientId', clientId);
+        console.log('Client ID:', clientId);
+
+        // Connection status element
+        const connectionStatus = document.getElementById('connectionStatus');
+
+        // Set today as the default date for the payment form
+        const today = new Date();
+        const formattedDate = today.toISOString().split('T')[0];
+        document.getElementById('billDate').value = formattedDate;
+
+        // Check if we're coming from a voice assistant direction
+        if (action === 'pay-bills' && sessionId) {
+          console.log('Detected action=pay-bills from URL parameters');
+          // Show assistant message immediately
+          document.getElementById('assistantMessage').style.display = 'block';
+
+          // Set a fallback timer to trigger the form display after a short delay
+          // This ensures the form appears even if the WebSocket connection hasn't delivered messages yet
+          setTimeout(function () {
+            console.log('Triggering form display via fallback timer');
+            fetchSessionData();
+            showPayBillForm();
+          }, 1000);
+        }
+
+        // WebSocket connection for real-time updates
+        let wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        let wsUrl = `${wsProtocol}//${window.location.host}/client-updates?clientId=${clientId}`;
+        console.log('WebSocket URL:', wsUrl);
+        let socket;
+        let reconnectAttempts = 0;
+        let maxReconnectAttempts = 5;
+
+        function connectWebSocket() {
+          try {
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = function () {
+              console.log('WebSocket connected');
+              connectionStatus.textContent = 'Connected to server';
+              connectionStatus.className = 'connected';
+              connectionStatus.style.display = 'block';
+              setTimeout(() => {
+                connectionStatus.style.display = 'none';
+              }, 3000);
+              reconnectAttempts = 0;
+
+              // Check if we're on a page with action=pay-bills
+              if (action === 'pay-bills' && sessionId) {
+                console.log(
+                  'On WebSocket connect: we have action=pay-bills, checking session data'
+                );
+                // Immediately check for session data
+                fetchSessionData();
+
+                // Show the form regardless after a short delay
+                setTimeout(function () {
+                  console.log(
+                    'Connection established, showing form automatically'
+                  );
+                  showPayBillForm();
+                }, 500);
+              }
+            };
+
+            socket.onmessage = function (event) {
+              const message = JSON.parse(event.data);
+              console.log('WebSocket message received:', message);
+
+              if (message.type === 'session-update') {
+                console.log('Session update received with data:', message.data);
+
+                // Update form fields with session data - but don't show form yet
+                if (message.data.customerName) {
+                  document.getElementById('customerName').value =
+                    message.data.customerName;
+                }
+
+                if (message.data.accountNumber) {
+                  document.getElementById('accountNumber').value =
+                    message.data.accountNumber;
+                }
+
+                // ONLY show the form if there's explicitly a pendingAction to show it
+                // This prevents showing the form just because customer data was received
+                if (message.data.pendingAction === 'show-payment-form') {
+                  console.log(
+                    'Automatically showing payment form from session update - pendingAction is set'
+                  );
+                  document.getElementById('assistantMessage').style.display =
+                    'block';
+                  showPayBillForm();
+                }
+              }
+
+              // This is the explicit action message that should trigger the form display
+              if (message.type === 'action') {
+                console.log('Received action message:', message.action);
+                if (message.action === 'show-payment-form') {
+                  // Show payment form automatically
+                  console.log(
+                    'Automatically showing payment form from action message'
+                  );
+                  document.getElementById('assistantMessage').style.display =
+                    'block';
+                  showPayBillForm();
+                }
+              }
+            };
+
+            socket.onclose = function () {
+              console.log('WebSocket connection closed');
+              connectionStatus.textContent = 'Disconnected from server';
+              connectionStatus.className = 'disconnected';
+              connectionStatus.style.display = 'block';
+
+              // Try to reconnect if not at max attempts
+              if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                console.log(
+                  `Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`
+                );
+                setTimeout(connectWebSocket, 3000); // Try to reconnect after 3 seconds
+              }
+            };
+
+            socket.onerror = function (error) {
+              console.error('WebSocket error:', error);
+              connectionStatus.textContent = 'Connection error';
+              connectionStatus.className = 'disconnected';
+              connectionStatus.style.display = 'block';
+            };
+          } catch (error) {
+            console.error('Error creating WebSocket:', error);
+          }
+        }
+
+        // Initialize WebSocket connection
+        connectWebSocket();
+
+        // Check if we should show the pay bills form automatically from URL parameters
+        if (action === 'pay-bills' && sessionId) {
+          // This will load the customer data and automatically show the form
+          fetchSessionData();
+
+          // Show assistant message
+          const assistantMessage = document.getElementById('assistantMessage');
+          assistantMessage.style.display = 'block';
+        }
+
+        // Button event listeners
+        document
+          .getElementById('payBillsBtn')
+          .addEventListener('click', showPayBillForm);
+        document
+          .getElementById('navPayBills')
+          .addEventListener('click', showPayBillForm);
+        document
+          .getElementById('cancelPayment')
+          .addEventListener('click', showWelcomeScreen);
+        document
+          .getElementById('returnHome')
+          .addEventListener('click', showWelcomeScreen);
+
+        // Form submission
+        document
+          .getElementById('billPaymentForm')
+          .addEventListener('submit', function (e) {
+            e.preventDefault();
+            processPayment();
+          });
+
+        // Function to fetch session data
+        function fetchSessionData() {
+          console.log('Fetching session data...');
+          fetch('/api/session-data')
+            .then((response) => response.json())
+            .then((data) => {
+              console.log('Session data received:', data);
+
+              // Update form fields if we have customer data
+              if (data.customerName) {
+                document.getElementById('customerName').value =
+                  data.customerName;
+              }
+
+              if (data.accountNumber) {
+                document.getElementById('accountNumber').value =
+                  data.accountNumber;
+              }
+
+              // Check for pending action
+              if (data.pendingAction === 'show-payment-form') {
+                console.log('Found pending action: show-payment-form');
+                document.getElementById('assistantMessage').style.display =
+                  'block';
+                showPayBillForm();
+              }
+              // If we have customer data from URL parameters, show the form anyway
+              else if (action === 'pay-bills' && sessionId) {
+                console.log('Showing payment form based on URL parameters');
+                showPayBillForm();
+              }
+            })
+            .catch((error) => {
+              console.error('Error fetching session data:', error);
+            });
+        }
+
+        // Function to show pay bill form
+        function showPayBillForm() {
+          console.log('Showing payment form');
+          document.getElementById('welcomeScreen').style.display = 'none';
+          document.getElementById('payBillForm').style.display = 'block';
+          document.getElementById('paymentSuccess').style.display = 'none';
+          document.getElementById('assistantMessage').style.display = 'block';
+
+          // If fields are empty, try to fetch session data
+          const customerNameField = document.getElementById('customerName');
+          const accountNumberField = document.getElementById('accountNumber');
+
+          if (!customerNameField.value || !accountNumberField.value) {
+            console.log('Customer data fields empty, fetching session data');
+            fetchSessionData();
+          } else {
+            console.log('Form displayed with customer data:', {
+              name: customerNameField.value,
+              account: accountNumberField.value,
+            });
+          }
+        }
+
+        // Function to show welcome screen
+        function showWelcomeScreen() {
+          document.getElementById('welcomeScreen').style.display = 'block';
+          document.getElementById('payBillForm').style.display = 'none';
+          document.getElementById('paymentSuccess').style.display = 'none';
+          document.getElementById('assistantMessage').style.display = 'none';
+        }
+
+        // Function to process payment
+        function processPayment() {
+          const paymentData = {
+            recipient: document.getElementById('billRecipient').value,
+            amount: document.getElementById('billAmount').value,
+            date: document.getElementById('billDate').value,
+          };
+
+          fetch('/api/pay-bill', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(paymentData),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.success) {
+                showPaymentSuccess(data);
+              } else {
+                alert('Payment failed: ' + data.message);
+              }
+            })
+            .catch((error) => {
+              console.error('Error processing payment:', error);
+              alert('An error occurred. Please try again later.');
+            });
+        }
+
+        // Function to show payment success
+        function showPaymentSuccess(data) {
+          document.getElementById('welcomeScreen').style.display = 'none';
+          document.getElementById('payBillForm').style.display = 'none';
+          document.getElementById('paymentSuccess').style.display = 'block';
+          document.getElementById('assistantMessage').style.display = 'none';
+
+          document.getElementById('successMessage').textContent =
+            `Your payment of $${data.transaction.amount} to ${data.transaction.recipient} has been processed successfully.`;
+          document.getElementById('transactionId').textContent =
+            data.transaction.id;
+
+          // Format date
+          const txDate = new Date(data.transaction.date);
+          document.getElementById('transactionDate').textContent =
+            txDate.toLocaleString();
+        }
+
+        // Cleanup when page is closed or refreshed
+        window.addEventListener('beforeunload', function () {
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.close();
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

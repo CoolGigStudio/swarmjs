@@ -3,11 +3,14 @@ import { createServer, get } from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
 import { config } from 'dotenv';
 import VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
+import {
+  CLINIC_SWARM_SYSTEM_MESSAGE,
+  CLINIC_SWARM_SYSTEM_MESSAGE_DAG,
+} from './prompts';
 
 config();
 
-const SYSTEM_MESSAGE =
-  'You are a helpful AI assistant who loves to chat about anything the user is interested about and is prepared to offer them facts.';
+const systemMessage = CLINIC_SWARM_SYSTEM_MESSAGE; //CLINIC_SWARM_SYSTEM_MESSAGE_DAG; //CLINIC_SWARM_SYSTEM_MESSAGE;
 const VOICE = 'alloy';
 const LOG_EVENT_TYPES = [
   'response.content.done',
@@ -70,37 +73,73 @@ twilioWss.on('connection', (twilioWs) => {
     const sessionUpdate = {
       type: 'session.update',
       session: {
-        turn_detection: { type: 'server_vad' },
+        turn_detection: {
+          type: 'server_vad',
+          silence_duration_ms: 600,
+          threshold: 0.6,
+        },
         input_audio_format: 'g711_ulaw',
         output_audio_format: 'g711_ulaw',
         voice: VOICE,
-        instructions: SYSTEM_MESSAGE,
+        instructions: systemMessage,
         modalities: ['text', 'audio'],
         tools: [
           {
             type: 'function',
-            name: 'get_current_time',
-            description: 'Get the current time',
+            name: 'lookupPatient',
+            description: 'Look up patient information by name',
             parameters: {
               type: 'object',
               properties: {
-                timezone: {
+                name: {
                   type: 'string',
-                  description: 'The timezone to get the time in',
+                  description: 'Patient name',
+                },
+                birthdate: {
+                  type: 'string',
+                  description: 'Patient birthdate',
                 },
               },
             },
           },
           {
             type: 'function',
-            name: 'get_current_weather',
-            description: 'Get the current weather for a specific city or area',
+            name: 'checkAvailableSlots',
+            description: 'Check available appointment slots for a date',
             parameters: {
               type: 'object',
               properties: {
-                city: {
+                date: {
                   type: 'string',
-                  description: 'The city or area to get the weather in',
+                  description: 'Date to check (YYYY-MM-DD)',
+                },
+              },
+            },
+          },
+          {
+            type: 'function',
+            name: 'lookupPrescription',
+            description: 'Look up patient prescription by name',
+            parameters: {
+              type: 'object',
+              properties: {
+                name: {
+                  type: 'string',
+                  description: 'Patient name',
+                },
+              },
+            },
+          },
+          {
+            type: 'function',
+            name: 'bookAppointment',
+            description: 'Book an appointment slot',
+            parameters: {
+              type: 'object',
+              properties: {
+                bookingInfo: {
+                  type: 'string',
+                  description: 'Appointment date and time and user',
                 },
               },
             },
@@ -155,20 +194,66 @@ twilioWss.on('connection', (twilioWs) => {
       if (response.type === 'response.output_item.done') {
         const { item } = response;
         if (item.type === 'function_call') {
-          if (item.name === 'get_current_weather') {
-            get_current_weather(JSON.parse(item.arguments)).then((weather) => {
+          console.log('Function call>>>>>>>>:', item);
+          if (item.name === 'lookupPatient') {
+            lookupPatient(JSON.parse(item.arguments)).then((customer) => {
               const data = {
                 type: 'conversation.item.create',
                 item: {
                   type: 'function_call_output',
                   call_id: item.call_id,
-                  output: JSON.stringify(weather),
+                  output: JSON.stringify(customer),
                 },
               };
-              console.log('Sending weather:', data);
+              console.log('Sending customer:', data);
               openaiWs.send(JSON.stringify(data));
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
             });
+          } else if (item.name === 'checkAvailableSlots') {
+            checkAvailableSlots(JSON.parse(item.arguments)).then((slots) => {
+              const data = {
+                type: 'conversation.item.create',
+                item: {
+                  type: 'function_call_output',
+                  call_id: item.call_id,
+                  output: JSON.stringify(slots),
+                },
+              };
+              console.log('Sending slots:', data);
+              openaiWs.send(JSON.stringify(data));
+              openaiWs.send(JSON.stringify({ type: 'response.create' }));
+            });
+          } else if (item.name === 'bookAppointment') {
+            bookAppointment(JSON.parse(item.arguments)).then((booking) => {
+              const data = {
+                type: 'conversation.item.create',
+                item: {
+                  type: 'function_call_output',
+                  call_id: item.call_id,
+                  output: JSON.stringify(booking),
+                },
+              };
+              console.log('Sending booking:', data);
+              openaiWs.send(JSON.stringify(data));
+              openaiWs.send(JSON.stringify({ type: 'response.create' }));
+            });
+          } else if (item.name === 'lookupPrescription') {
+            lookupPrescription(JSON.parse(item.arguments)).then(
+              (prescription) => {
+                console.log('Prescription:', prescription);
+                const data = {
+                  type: 'conversation.item.create',
+                  item: {
+                    type: 'function_call_output',
+                    call_id: item.call_id,
+                    output: JSON.stringify(prescription),
+                  },
+                };
+                console.log('Sending prescription:', data);
+                openaiWs.send(JSON.stringify(data));
+                openaiWs.send(JSON.stringify({ type: 'response.create' }));
+              }
+            );
           }
         }
       }
@@ -247,10 +332,110 @@ twilioWss.on('connection', (twilioWs) => {
   });
 });
 
-const get_current_weather = async (arugments: any) => {
-  const { city } = arugments;
-  console.log('Getting weather for:', city);
-  return { weather: 'Snowing', temperature: '20C', city: city };
+const customerDB = [
+  {
+    firstName: 'John',
+    lastName: 'Doe',
+    name: 'John Doe',
+    birthdate: '2009-10-1',
+    insurance: 'Blue Shield',
+  },
+  {
+    firstName: 'Mary',
+    lastName: 'Smith',
+    name: 'Mary Smith',
+    birthdate: '2010-05-15',
+    insurance: 'Blue Shield',
+  },
+  {
+    firstName: 'John',
+    lastName: 'Thompson',
+    name: 'John Thompson',
+    birthdate: '2011-03-10',
+    insurance: 'Blue Shield',
+  },
+  {
+    firstName: 'Mary',
+    lastName: 'Baker',
+    name: 'Mary Baker',
+    birthdate: '2012-04-15',
+    insurance: 'Blue Shield',
+  },
+];
+
+const lookupPatient = async (params: any) => {
+  console.log('Lookup patient:', params);
+  // Extract the name from the params object
+  const input = params.name.trim();
+  const hasComma = input.includes(',');
+
+  let patient: string = JSON.stringify({
+    firstName: 'John',
+    lastName: 'Doe',
+    name: 'John Doe',
+    birthdate: '2009-10-1',
+    insurance: 'Blue Shield',
+  }); //'Patient not found';
+  if (hasComma) {
+    // If there's a comma, treat as firstName, lastName format
+    const [firstName, lastName] = input
+      .split(',')
+      .map((name: string) => name.trim());
+    const customer = customerDB.find(
+      (c) =>
+        c.firstName.toLowerCase() === firstName.toLowerCase() &&
+        c.lastName.toLowerCase() === lastName.toLowerCase()
+    );
+    patient = customer ? JSON.stringify(customer) : patient;
+  } else {
+    // Single name search - could be either first or last name
+    const searchName = input;
+    const customer = customerDB.find(
+      (c) =>
+        c.firstName.toLowerCase().includes(searchName.toLowerCase()) ||
+        c.lastName.toLowerCase().includes(searchName.toLowerCase())
+    );
+    patient = customer ? JSON.stringify(customer) : patient;
+  }
+  console.log('Patient:', patient);
+  return patient;
+};
+
+const appointmentSlots = new Map([
+  ['2025-02-08', ['09:00', '11:00', '14:00']],
+  ['2025-02-09', ['10:00', '13:00', '15:00']],
+  ['2025-01-10', ['09:00', '12:00', '16:00']],
+]);
+
+const checkAvailableSlots = async (params: any) => {
+  const slots = appointmentSlots.get(params.date as string);
+  return slots ? JSON.stringify(slots) : appointmentSlots.get('2025-02-08');
+};
+
+const bookAppointment = async (arugments: any) => {
+  const { bookingInfo } = arugments;
+  console.log('Booking appointment for:', bookingInfo);
+  return 'Appointment booked successfully for ' + bookingInfo;
+};
+
+const prescriptionDB = [
+  {
+    name: 'Aspirin',
+    quantity: 100,
+    duration: '10 days',
+  },
+  {
+    name: 'Ibuprofen',
+    quantity: 200,
+    duration: '5 days',
+  },
+];
+const lookupPrescription = async (params: any) => {
+  const input = params.name.trim();
+  const prescription = prescriptionDB.find(
+    (p) => p.name.toLowerCase() === input.toLowerCase()
+  );
+  return prescription ? JSON.stringify(prescription) : 'Prescription not found';
 };
 
 server.listen(port, () => {

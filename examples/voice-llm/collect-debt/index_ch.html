@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>催收电话系统</title>
+    <style>
+      body {
+        font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        line-height: 1.6;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      h1 {
+        color: #2c3e50;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .form-container {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 16px;
+      }
+      textarea {
+        height: 100px;
+      }
+      button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        display: block;
+        width: 100%;
+      }
+      button:hover {
+        background-color: #2980b9;
+      }
+      #status {
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 4px;
+        display: none;
+      }
+      .success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .error {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .call-history {
+        margin-top: 30px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+      th,
+      td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+      th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+      }
+      tr:hover {
+        background-color: #f5f5f5;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>催收电话系统</h1>
+
+    <div class="form-container">
+      <form id="callForm">
+        <div class="form-group">
+          <label for="customerName">客户姓名:</label>
+          <input
+            type="text"
+            id="customerName"
+            name="customerName"
+            value="李强"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="phoneNumber">电话号码:</label>
+          <input
+            type="tel"
+            id="phoneNumber"
+            name="phoneNumber"
+            value="+16175847925"
+            placeholder="+1XXXXXXXXXX"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="customerProfile">客户资料/备注:</label>
+          <textarea id="customerProfile" name="customerProfile"></textarea>
+        </div>
+
+        <button type="submit">发起电话</button>
+      </form>
+    </div>
+
+    <div id="status"></div>
+
+    <div class="call-history">
+      <h2>最近通话</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>客户</th>
+            <th>电话</th>
+            <th>状态</th>
+            <th>通话ID</th>
+          </tr>
+        </thead>
+        <tbody id="callHistoryBody">
+          <!-- 通话历史将在这里动态添加 -->
+        </tbody>
+      </table>
+    </div>
+
+    <script>
+      document
+        .getElementById('callForm')
+        .addEventListener('submit', async function (e) {
+          e.preventDefault();
+
+          const statusDiv = document.getElementById('status');
+          statusDiv.textContent = '正在发起电话...';
+          statusDiv.className = '';
+          statusDiv.style.display = 'block';
+
+          const formData = {
+            customerName: document.getElementById('customerName').value,
+            phoneNumber: document.getElementById('phoneNumber').value,
+            customerProfile: document.getElementById('customerProfile').value,
+          };
+
+          try {
+            const response = await fetch('/start-call', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(formData),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+              statusDiv.textContent = `电话发起成功！通话ID: ${data.callSid}`;
+              statusDiv.className = 'success';
+
+              // 添加到通话历史
+              addToCallHistory({
+                time: new Date().toLocaleTimeString(),
+                customer: formData.customerName,
+                phone: formData.phoneNumber,
+                status: '已发起',
+                callSid: data.callSid,
+              });
+
+              // 重置表单
+              document.getElementById('callForm').reset();
+
+              // 重置默认值
+              document.getElementById('customerName').value = '李强';
+              document.getElementById('phoneNumber').value = '+16175847925';
+            } else {
+              statusDiv.textContent = `错误: ${data.error || '未知错误'}`;
+              statusDiv.className = 'error';
+            }
+          } catch (error) {
+            statusDiv.textContent = `错误: ${error.message}`;
+            statusDiv.className = 'error';
+            console.error('错误:', error);
+          }
+        });
+
+      function addToCallHistory(call) {
+        const tbody = document.getElementById('callHistoryBody');
+        const row = document.createElement('tr');
+
+        row.innerHTML = `
+                <td>${call.time}</td>
+                <td>${call.customer}</td>
+                <td>${call.phone}</td>
+                <td>${call.status}</td>
+                <td>${call.callSid}</td>
+            `;
+
+        // 在表格顶部插入
+        if (tbody.firstChild) {
+          tbody.insertBefore(row, tbody.firstChild);
+        } else {
+          tbody.appendChild(row);
+        }
+      }
+    </script>
+  </body>
+</html>

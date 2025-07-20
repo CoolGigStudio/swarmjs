@@ -169,22 +169,27 @@ const tools: ToolDefinition[] = [
 const customerServiceAgent: AgentConfig = {
   name: 'CustomerService',
   description: 'Handles complete customer interaction flow',
-  systemMessage: `You are a customer service agent for a car dealership following a specific workflow:
-  1. Start by greeting and asking for auth ID
-  2. Look up customer info and confirm details
-  3. If customer hasn't mentioned booking, ask about appointment needs
-  4. Check availability for requested dates
-  5. Present 3 options and help book appointment
-  6. Confirm booking details
+  systemMessage: `You are a customer service agent for South Bay Pediatrics Medical Group. You should follow the following workflow:
+  1. Start by greeting and asking for the patient's name and birthdate
+  2. Look up the patient's info and confirm the details
+  3. Ask what help does the patient need for help?
+  4. For the office visit, ask the patient the reason for the visit and triage the conditions so you can provide the available slots according to the following rules:
+    - If the patient's condition is not urgent, provide the available slots for the next 3 days.
+    - If the patient's condition is urgent, provide the available slots available today.
+    - If the patient's condition is annual physical, provide the available slots for the next 3 months.
+    - If the patient's condition is life threatening, transfer the call to a live operator.
+    - If the patient's condition is a new patient, ask for the patient's name, birthdate, and insurance information. And then provide the available slots for the next 3 weeks.
+  5. For prescription refill, look up the patient's existing prescriptions and if the patient has a valid prescription, ask the patient which prescription they would like to refill. 
+  6. For other inquiries, transfer the call to a live operator.
   
   Always use customerChatCLI for customer interaction.
   Maintain a natural conversation flow while following the steps.`,
   allowedTools: [
     'customerChatCLI',
-    'lookupCustomer',
+    'lookupPatient',
     'checkAvailableSlots',
     'bookAppointment',
-    'getEarliestAvailableDate',
+    'lookupPrescription',
     'terminateSession',
   ],
 };
@@ -208,47 +213,57 @@ async function main() {
 
   try {
     const initialScript = `
-          # Customer Interaction Initialization
-          $1 = customerChatCLI(message: "Hello! Welcome to our car dealership. Could you please provide your authentication ID?")
-  
-          # Customer Information Lookup
-          $2 = lookupCustomer(authId: $1)
-  
-          # Confirm Customer Details
-          $3 = customerChatCLI(message: "Thank you! Let me confirm your details: $2. Is everything correct?")
-  
-          # Check for Appointment Needs
-          $4 = customerChatCLI(message: "Would you like to book an appointment with us?")
-  
-          # Determine Next Steps Based on Customer Response
-          # If customer wants to book an appointment, proceed with availability check
-          # Hierarchical Task: Appointment Booking Process
-              # Get Current and Earliest Available Dates
-              $5 = getEarliestAvailableDate()
-  
-              # Check Available Slots for the Earliest Date
-              $6 = checkAvailableSlots(date: $5.earliestDate)
-  
-              # Present Options to Customer
-              $7 = customerChatCLI(message: "Here are the available slots for $5.earliestDate: $6. Please choose one.")
-  
-              # Book the Appointment
-              $8 = bookAppointment(date: $5.earliestDate, time: $7, authId: $1)
-  
-              # Confirm Booking Details
-              $9 = customerChatCLI(message: "Your appointment is confirmed for $5.earliestDate at $7. Thank you!")
-  
-          # Error Handling
-          # If any step fails, inform the customer and attempt to resolve
-          $10 = customerChatCLI(message: "If you encounter any issues, please let us know and we'll assist you further.")
-  
-          # End of Customer Interaction
-          $11 = terminateSession(message: "Thank you for choosing our dealership. Have a great day!")
-      `;
+    # System Initialization: Greet the customer and start the interaction
+    $1 = customerChatCLI(message: "Hello, welcome to South Bay Pediatrics Medical Group. May I have your name and birthdate, please?")
+    
+    # Lookup Customer Info
+    # Since the allowed tool "lookupPatient" is not available in our tools list, we denote this step as handled by the LLM.
+    $2 = lookupPatient(name: $1, birthdate: $1)
+    
+    # Ask the Customer for the Type of Assistance Needed
+    $3 = customerChatCLI(message: "How can I assist you today? (Office Visit, Prescription Refill, or Other Inquiries)")
+    
+    # ====================================================================
+    # Branching: The following flows represent mutually exclusive branches
+    # based on the customer's response. Only ONE branch will execute.
+    # ====================================================================
+    
+    # Branch: Office Visit Flow
+    # Parent Task: Handling Office Visit Appointment
+        $4 = customerChatCLI(message: "For an office visit, please provide the reason for your visit along with any details about your condition.")
+        # Triage the customer's condition.
+        # (Note: Determination of the appropriate date range is handled manually since no dedicated triage tool is available.)
+        # For example:
+        # - If not urgent: check slots for the next 3 days.
+        # - If urgent: check slots available today.
+        # - If annual physical: check slots for the next 3 months.
+        # - If life threatening: transfer to a live operator.
+        # - If new patient: ask additional details then check slots for the next 3 weeks.
+        $5 = checkAvailableSlots(date: "calculated_date_based_on_triage")  # The exact date is determined by the condition details.
+        $6 = bookAppointment(date: "selected_date", time: "selected_time", authId: "customer-auth-id")
+    
+    # Branch: Prescription Refill Flow
+    # Parent Task: Handling Prescription Refill Request
+        # Since the allowed tool "lookupPrescription" is not available in our tools list,
+        # we denote the prescription lookup step as handled by the LLM.
+        $7 = lookupPrescriptionByLLM(authId: "customer-auth-id")
+        $8 = customerChatCLI(message: "Please indicate which prescription you would like to refill.")
+    
+    # Branch: Other Inquiries Flow
+    # Parent Task: Transferring the Call for Other Inquiries
+        $9 = terminateSession(message: "Transferring you to a live operator for additional assistance.")
+    
+    # ====================================================================
+    # Finalization: Conclude the Interaction
+    $10 = customerChatCLI(message: "Thank you for contacting South Bay Pediatrics Medical Group. Have a great day!")
+    
+    # ====================================================================
+    # Error Handling Consideration
+    # This step is available as a fallback if any critical error occurs during the interaction.
+    $11 = terminateSession(message: "We encountered an error during our interaction. Please try again later or contact support directly.")
+`;
 
-    await swarm.runSession(flow.id, 'Start customer interaction', {
-      script: initialScript,
-    });
+    await swarm.runSession(flow.id, 'Start customer interaction');
     await swarm.endSession(flow.id);
     rl.close();
   } catch (error) {

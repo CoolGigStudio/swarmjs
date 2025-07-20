@@ -169,22 +169,23 @@ const tools: ToolDefinition[] = [
 const customerServiceAgent: AgentConfig = {
   name: 'CustomerService',
   description: 'Handles complete customer interaction flow',
-  systemMessage: `You are a customer service agent for a car dealership following a specific workflow:
-  1. Start by greeting and asking for auth ID
-  2. Look up customer info and confirm details
-  3. If customer hasn't mentioned booking, ask about appointment needs
-  4. Check availability for requested dates
-  5. Present 3 options and help book appointment
-  6. Confirm booking details
+  systemMessage: `You are a customer service agent for Fremont Bank. You should follow the following workflow to assist the customer:
+  1. Start by greeting and asking for the customer's name and account number or card number
+  2. Look up the customer's info and confirm the details
+  3. Ask what help does the customer need for help? The services that you can provide are: checking balance, paying bills, and provide branch location and hours.
+  4. If the customer needs to check balance, ask for the account number or card number and provide the balance.
+  5. If the customer needs to pay bills, ask for the bill amount and provide the payment options.
+  6. If the customer needs to know the branch location and hours, provide the information.
+  7. For other inquiries, transfer the call to a live operator.
   
   Always use customerChatCLI for customer interaction.
   Maintain a natural conversation flow while following the steps.`,
   allowedTools: [
     'customerChatCLI',
     'lookupCustomer',
-    'checkAvailableSlots',
-    'bookAppointment',
-    'getEarliestAvailableDate',
+    'checkBalance',
+    'payBills',
+    'provideBranchInfo',
     'terminateSession',
   ],
 };
@@ -194,7 +195,7 @@ const swarmConfig: SwarmConfig = {
   tools,
   model: 'gpt-4o',
   apiKey: process.env.OPENAI_API_KEY,
-  planningModel: 'o3-mini',
+  planningModel: 'gpt-4.5-preview',
   options: {
     saveDags: process.env.SAVE_DAGS === 'true',
   },
@@ -208,47 +209,37 @@ async function main() {
 
   try {
     const initialScript = `
-          # Customer Interaction Initialization
-          $1 = customerChatCLI(message: "Hello! Welcome to our car dealership. Could you please provide your authentication ID?")
-  
-          # Customer Information Lookup
-          $2 = lookupCustomer(authId: $1)
-  
-          # Confirm Customer Details
-          $3 = customerChatCLI(message: "Thank you! Let me confirm your details: $2. Is everything correct?")
-  
-          # Check for Appointment Needs
-          $4 = customerChatCLI(message: "Would you like to book an appointment with us?")
-  
-          # Determine Next Steps Based on Customer Response
-          # If customer wants to book an appointment, proceed with availability check
-          # Hierarchical Task: Appointment Booking Process
-              # Get Current and Earliest Available Dates
-              $5 = getEarliestAvailableDate()
-  
-              # Check Available Slots for the Earliest Date
-              $6 = checkAvailableSlots(date: $5.earliestDate)
-  
-              # Present Options to Customer
-              $7 = customerChatCLI(message: "Here are the available slots for $5.earliestDate: $6. Please choose one.")
-  
-              # Book the Appointment
-              $8 = bookAppointment(date: $5.earliestDate, time: $7, authId: $1)
-  
-              # Confirm Booking Details
-              $9 = customerChatCLI(message: "Your appointment is confirmed for $5.earliestDate at $7. Thank you!")
-  
-          # Error Handling
-          # If any step fails, inform the customer and attempt to resolve
-          $10 = customerChatCLI(message: "If you encounter any issues, please let us know and we'll assist you further.")
-  
-          # End of Customer Interaction
-          $11 = terminateSession(message: "Thank you for choosing our dealership. Have a great day!")
-      `;
+        # Step 1: Greet the customer and request identification details
+        $1 = customerChatCLI(message: "Hello! Welcome to Fremont Bank. Please provide your name and your account number or card number.")
 
-    await swarm.runSession(flow.id, 'Start customer interaction', {
-      script: initialScript,
-    });
+        # Step 2: Look up customer information using the provided information: name and account number or card number
+        $2 = lookupCustomer(customerName: $1, accountNumber: $1)
+
+        # Step 3: Confirm customer details and present available service options
+        $3 = customerChatCLI(message: "Thank you, [Customer Name]. Your details have been confirmed. How can we assist you today? Options: check balance, pay bills, or branch information.")
+
+        # Step 4: Process customer's service selection based on the customer's response
+        # Each branch represents a possible customer request
+            # Branch: Customer requests to check their balance
+            $4 = checkBalance(account: $1) 
+
+            # Branch: Customer requests to pay bills
+            $5 = payBills(billAmount: $1) 
+
+            # Branch: Customer requests branch location and hours information
+            $6 = provideBranchInfo() 
+
+            # Branch: Customer requests other services beyond the automated ones; transfer to live operator
+            $7 = terminateSession(message: "Transferring you to a live operator for further assistance."
+
+        # Step 5: End the interaction by thanking the customer
+        $8 = customerChatCLI(message: "Thank you for contacting Fremont Bank. Have a great day!")
+
+        # Error Handling: In case an error occurs at any stage, terminate the session gracefully
+        $9 = terminateSession(message: "An error occurred during the interaction. Please try again later.")
+    `;
+
+    await swarm.runSession(flow.id, 'Start customer interaction');
     await swarm.endSession(flow.id);
     rl.close();
   } catch (error) {

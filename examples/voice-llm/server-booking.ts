@@ -20,7 +20,7 @@ const LOG_EVENT_TYPES = [
 ];
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3010;
 app.use(express.json());
 
 app.post('/incoming-call', (req, res) => {
@@ -70,7 +70,11 @@ twilioWss.on('connection', (twilioWs) => {
     const sessionUpdate = {
       type: 'session.update',
       session: {
-        turn_detection: { type: 'server_vad' },
+        turn_detection: {
+          type: 'server_vad',
+          silence_duration_ms: 600,
+          threshold: 0.6,
+        },
         input_audio_format: 'g711_ulaw',
         output_audio_format: 'g711_ulaw',
         voice: VOICE,
@@ -171,6 +175,8 @@ twilioWss.on('connection', (twilioWs) => {
         if (item.type === 'function_call') {
           if (item.name === 'lookupCustomer') {
             lookupCustomer(JSON.parse(item.arguments)).then((customer) => {
+              console.log('Item>>>>>>>>:', item.arguments);
+              console.log('Customer>>>>>>>>:', customer);
               const data = {
                 type: 'conversation.item.create',
                 item: {
@@ -289,28 +295,63 @@ twilioWss.on('connection', (twilioWs) => {
   });
 });
 
-const customerDB = new Map([
-  [
-    'John Doe',
-    {
-      name: 'John Doe',
-      vehicle: 'Tesla Model 3',
-      history: 'Last service: 2024-01-15',
-    },
-  ],
-  [
-    'Jane Smith',
-    {
-      name: 'Jane Smith',
-      vehicle: 'BMW X5',
-      history: 'Last service: 2024-02-20',
-    },
-  ],
-]);
+const customerDB = [
+  {
+    firstName: 'John',
+    lastName: 'Doe',
+    name: 'John Doe',
+    vehicle: 'Tesla Model 3',
+    history: 'Last service: 2024-01-15',
+  },
+  {
+    firstName: 'Mary',
+    lastName: 'Smith',
+    name: 'Mary Smith',
+    vehicle: 'BMW X5',
+    history: 'Last service: 2024-02-20',
+  },
+  {
+    firstName: 'John',
+    lastName: 'Thompson',
+    name: 'John Thompson',
+    vehicle: 'Toyota Camry',
+    history: 'Last service: 2024-03-10',
+  },
+  {
+    firstName: 'Mary',
+    lastName: 'Baker',
+    name: 'Mary Baker',
+    vehicle: 'Honda Accord',
+    history: 'Last service: 2024-04-15',
+  },
+];
 
-const lookupCustomer = async (arugments: any) => {
-  const customer = customerDB.get(arugments.name as string);
-  return customer ? JSON.stringify(customer) : 'Customer not found';
+const lookupCustomer = async (params: any) => {
+  // Extract the name from the params object
+  const input = params.name.trim();
+  const hasComma = input.includes(',');
+
+  if (hasComma) {
+    // If there's a comma, treat as firstName, lastName format
+    const [firstName, lastName] = input
+      .split(',')
+      .map((name: string) => name.trim());
+    const customer = customerDB.find(
+      (c) =>
+        c.firstName.toLowerCase() === firstName.toLowerCase() &&
+        c.lastName.toLowerCase() === lastName.toLowerCase()
+    );
+    return customer ? JSON.stringify(customer) : 'Customer not found';
+  } else {
+    // Single name search - could be either first or last name
+    const searchName = input;
+    const customer = customerDB.find(
+      (c) =>
+        c.firstName.toLowerCase().includes(searchName.toLowerCase()) ||
+        c.lastName.toLowerCase().includes(searchName.toLowerCase())
+    );
+    return customer ? JSON.stringify(customer) : 'Customer not found';
+  }
 };
 
 const appointmentSlots = new Map([
