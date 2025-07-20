@@ -1,20 +1,20 @@
 # SwarmJS
 
-Agentic framework inspired from OpenAI's swarm framework in Python for TypeScript and JavaScript.
+Agentic framework inspired by OpenAI's swarm framework, implemented in TypeScript and JavaScript. Supports both text-based and voice-based AI agent interactions with tool calling, session management, and real-time communication.
 
 ## Prerequisites
 
-- Node.js (v16 or higher)
+- Node.js (v18 or higher)
 - npm (v7 or higher)
-- TypeScript (v4.5 or higher)
 - OpenAI API key
+- For voice features: Twilio account, ngrok, ffmpeg
 
 ## Setup
 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/swarmjs.git
+git clone https://github.com/CoolGigStudio/swarmjs.git
 cd swarmjs
 ```
 
@@ -24,168 +24,160 @@ cd swarmjs
 npm install
 ```
 
-3. Create a `.env` file in the root directory and add your OpenAI API key:
+3. Create a `.env` file in the root directory:
 
 ```bash
 OPENAI_API_KEY=your_api_key_here
 DEBUG=false  # Set to true for detailed logging
+
+# For voice features with VoIP (optional):
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+HOSTNAME=your_ngrok_or_server_url
+PORT=3010  # Voice server port (default: 3010)
 ```
+
+## Architecture
+
+SwarmJS uses a layered architecture with these core components:
+
+- **AbstractSwarm**: Base class for all swarm implementations
+- **GptSwarm**: Text-based interactions with OpenAI GPT models
+- **VoiceSwarm**: Voice-based interactions with WebSocket support
+- **VoiceIOManager**: Real-time voice I/O and WebSocket management
 
 ## Project Structure
 
 ```
 swarmjs/
-├── core/
-│   ├── swarm.ts
-│   └── types.ts
-├── lib/
-│   └── swarms/
-│       └── DagSwarm.ts
-├── examples/
-│   ├── simple-agent.ts
-│   └── simple-dag-swarm.ts
-├── repl.ts
-└── package.json
+├── src/
+│   ├── core/           # Core swarm implementations
+│   ├── types/          # TypeScript type definitions
+│   └── tools/          # Tool handlers and utilities
+├── examples/           # Example implementations
+│   ├── voice-llm/      # Voice-based examples
+│   ├── bank-swarm/     # Banking assistant examples
+│   └── *.ts           # Various text-based examples
+├── dist/              # Compiled JavaScript output
+└── tests/             # Test files
 ```
 
-## Available Examples
+## Running the Application
 
-### 1. Simple Agent Example
-
-A basic implementation using a single agent to create customized greetings based on timezone:
+### Text-based Examples
 
 ```bash
-npm run example:simple-agent
-# or
-ts-node examples/simple-agent.ts
+# Car dealership booking agent
+ts-node examples/customerAgentCarDealer.ts
+
+# Banking assistant
+ts-node examples/bank-swarm.ts
+
+# Healthcare clinic assistant
+ts-node examples/clinic-swarm.ts
+
+# Debt collection assistant
+ts-node examples/collect-debt.ts
 ```
 
-### 2. DAG Swarm Example
-
-A more complex implementation using Directed Acyclic Graph (DAG) for planning and execution:
+### Voice-based Examples
 
 ```bash
-npm run example:dag-swarm
-# or
-ts-node examples/simple-dag-swarm.ts
+# Start voice server (requires Twilio setup)
+npm run voice
+
+# Banking voice assistant
+ts-node examples/voice-llm/bank/server.ts
+
+# Debt collection voice assistant
+ts-node examples/voice-llm/collect-debt/collect-debt.ts
 ```
 
-## Development
+## Key Features
 
-### Running in Debug Mode
+- **Multi-modal Support**: Both text and voice-based agent interactions
+- **Session Management**: Persistent sessions with unique IDs and state tracking
+- **Tool Integration**: Extensible tool system with validation and error handling
+- **Real-time Communication**: WebSocket support for voice applications
+- **Type Safety**: Full TypeScript implementation with strict typing
+- **Modular Architecture**: Pluggable components and configurations
 
-Set the `DEBUG` environment variable to `true` in your `.env` file or when running the command:
+## Local Development and Testing
+
+### Development Commands
 
 ```bash
-DEBUG=true npm run example:simple-agent
+npm run dev           # Start development REPL with hot reload
+npm run dev:debug     # Start with debug logging enabled
+npm run test          # Run Jest tests
+npm run lint          # Run ESLint
+npm run format        # Format code with Prettier
+npm run generate      # Generate swarm templates
 ```
 
-### Adding New Examples
+### Voice Features Setup
 
-1. Create a new file in the `examples` directory
-2. Import the `runExample` function from `repl.ts`
-3. Implement your example following the existing patterns
-4. Add a new script to `package.json` for easy execution
+For voice-enabled applications, additional setup is required:
 
-Example:
+#### 1. Twilio Configuration
+Set up Twilio credentials for phone call handling in your `.env` file.
 
-```typescript
-import { runExample } from '../repl';
-import { Agent } from '../core/types';
-
-// Define your agent and functions
-const myAgent: Agent = {
-  // Agent configuration
-};
-
-runExample('MyExample', () => myAgent);
-```
-
-## Building the Project
-
-1. Build the TypeScript files:
+#### 2. ngrok Setup (Required for Local Development)
+ngrok is required to expose your local server to Twilio's webhooks:
 
 ```bash
+# Install ngrok
+npm install -g ngrok
+# or download from https://ngrok.com
+
+# Start ngrok tunnel
+ngrok http 3010
+
+# Update your .env file with the ngrok URL
+HOSTNAME=https://your-ngrok-url.ngrok-free.app
+```
+
+**Configure Twilio Webhook:**
+- In your Twilio console, set your phone number's webhook URL to: `https://your-ngrok-url.ngrok-free.app/incoming-call`
+
+**Note:** ngrok URLs change on each restart unless you have a paid plan with reserved domains.
+
+#### 3. Audio Processing
+Requires ffmpeg and sox for audio handling.
+
+#### Voice Swarm Characteristics
+
+Voice swarms operate differently from text swarms:
+
+- Event-driven architecture using WebSockets
+- Real-time audio streaming via VoIP
+- Cannot use `runOnce()` or batch processing
+- Require active sessions for operation
+- Use Twilio as VoIP provider for phone call integration
+
+## Database Access
+
+SwarmJS includes a SQLite database for DAG (Directed Acyclic Graph) storage:
+
+```bash
+# Open the database
+sqlite3 dags.db
+
+# Query all records
+SELECT * FROM dags;
+```
+
+## Building and Deployment
+
+```bash
+# Build for production
 npm run build
-```
 
-This will:
+# Run compiled version
+node dist/examples/customerAgentCarDealer.js
 
-- Type-check all files
-- Compile TypeScript to JavaScript
-- Output to the `dist` directory
-
-2. Run the built version:
-
-```bash
-node dist/examples/simple-agent.js
-```
-
-## Scripts
-
-Add these scripts to your `package.json`:
-
-```json
-{
-  "scripts": {
-    "build": "tsc",
-    "start": "ts-node repl.ts",
-    "example:simple-agent": "ts-node examples/simple-agent.ts",
-    "example:dag-swarm": "ts-node examples/simple-dag-swarm.ts",
-    "dev": "ts-node-dev --respawn --transpile-only repl.ts",
-    "lint": "eslint . --ext .ts",
-    "test": "jest"
-  }
-}
-```
-
-## Dependencies
-
-Add these to your `package.json`:
-
-```json
-{
-  "dependencies": {
-    "openai": "^4.0.0",
-    "dotenv": "^16.0.0",
-    "chalk": "^4.1.2"
-  },
-  "devDependencies": {
-    "@types/node": "^16.0.0",
-    "typescript": "^4.5.0",
-    "ts-node": "^10.0.0",
-    "ts-node-dev": "^2.0.0",
-    "@typescript-eslint/eslint-plugin": "^5.0.0",
-    "@typescript-eslint/parser": "^5.0.0",
-    "eslint": "^8.0.0",
-    "jest": "^27.0.0",
-    "@types/jest": "^27.0.0",
-    "ts-jest": "^27.0.0"
-  }
-}
-```
-
-## TypeScript Configuration
-
-Add this `tsconfig.json` to your project root:
-
-```json
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "lib": ["ES2020"],
-    "outDir": "./dist",
-    "rootDir": "./",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
-  },
-  "include": ["./**/*.ts"],
-  "exclude": ["node_modules", "dist"]
-}
+# Test the build
+npm test
 ```
 
 ## Contributing
@@ -196,34 +188,12 @@ Add this `tsconfig.json` to your project root:
 4. Push to the branch
 5. Create a Pull Request
 
-## License
-
-MIT
-
-## Support
-
-For support, please open an issue in the GitHub repository.
+Please ensure your code follows the project's TypeScript and ESLint conventions.
 
 ## License
 
 MIT License - see LICENSE for details
 
-## Contributing
+## Support
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Access the DAG sqlite database
-
-You can access the DAG sqlite database by running the following command:
-
-## Open the database
-
-```bash
-sqlite3 dag.db
-```
-
-## Select all records from dags table
-
-```sqlite
-select \* from dags;
-```
+For support, please open an issue in the GitHub repository.
