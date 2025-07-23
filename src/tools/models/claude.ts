@@ -22,8 +22,7 @@ export class ClaudeService implements AIService {
   }
 
   async complete(
-    messages: AIMessage[],
-    systemMessage?: AIMessage
+    messages: AIMessage[]
   ): Promise<AIResponse> {
     try {
       // Prepare messages for Claude - converting the format

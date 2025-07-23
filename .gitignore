@@ -128,3 +128,14 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# SwarmJS specific ignores
+*.mp3
+*.wav
+temp/
+uploads/
+.DS_Store
+*-*.json
+test-compile.tsconfig.json
+.vscode/
+.claude/

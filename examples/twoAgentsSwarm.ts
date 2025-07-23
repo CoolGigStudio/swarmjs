@@ -86,18 +86,32 @@ async function main(): Promise<void> {
         return extractedText.split('').reverse().join('');
       },
     },
-    // {
-    //   type: 'function',
-    //   function: {
-    //     name: 'summarize',
-    //     description: 'Summarizes and returns the final result',
-    //     parameters: {
-    //       type: 'object',
-    //       properties: {
-    //         chatHistory: {
-    //           type: 'string',
-    //           description:
-    //             'The entire history of the chat history since the start of the first tool call',
+    {
+      type: 'function',
+      function: {
+        name: 'reduceByTwoLetters',
+        description: 'Reduces the text by two letters',
+        parameters: {
+          type: 'object',
+          properties: {
+            text: {
+              type: 'string',
+              description: 'Text to reduce',
+            },
+          },
+        },
+      },
+      handler: async (params): Promise<string> => {
+        const text = params.text as string;
+        if (text.length < 3) {
+          return text;
+        }
+        // Reduce two letters at a time
+        let reducedText = text;
+        reducedText = reducedText.slice(0, -2);
+        return reducedText;
+      },
+    },
     //         },
     //       },
     //     },
@@ -132,16 +146,16 @@ async function main(): Promise<void> {
     2. Extracts the final alphabetic-only content
     
     Always show the decoded result in your response.`,
-    allowedTools: ['decode', 'summarize'],
+    allowedTools: ['decode', 'reduceByTwoLetters'],
   };
 
   // Create swarm configuration
   const config: SwarmConfig = {
     agents: [encoderAgent, decoderAgent],
     tools: tools,
-    model: 'gpt-4o',
+    model: 'gpt-4o', //'gpt-4o', //'o1-mini',
     apiKey: process.env.OPENAI_API_KEY,
-    planningModel: 'o1-mini', //'gpt-4o', //'o1-mini',
+    planningModel: 'gpt-4o', //'o1-mini',
     options: {
       saveDags: process.env.SAVE_DAGS === 'true',
     },
@@ -160,29 +174,33 @@ async function main(): Promise<void> {
       console.log('Executing script...');
       const response = await swarm.runSession(
         flow.id,
-        'Process the following inputText: "Hello123, World!!!"',
-        {
-          script: `                                                                                                                                       
-          # Encoding Phase                                                                                                                            
-          $1 = encode(text: "Hello123, World!!!")                                                                                                     
-                                                                                                                                                      
-          # Cleanup Phase                                                                                                                             
-          $2 = cleanup(text: $1)                                                                                                                      
-                                                                                                                                                      
-          # Agent Switching                                                                                                                           
-          $3 = switchAgent(agentName: "Decoder", currentStepNu                                                                                        
-  mber: "$2", lastOutput: $2)                                                                                                                         
-                                                                                                                                                      
-          # Decoding Phase                                                                                                                            
-          $4 = decode(text: $2)                                                                                                                       
-                                                                                                                                                      
-          # Summarization Phase                                                                                                                       
-          $5 = summarize(text: $4)                                                                                                                    
-                                                                                                                                                      
-          # Error Handling                                                                                                                            
-          $6 = handleErrors(process: $5)ByLLM                                                                                                         
-      `,
-        }
+        'Encode the inputText only one time and then process the encoded text until you get less than 3 letters message and keep the resulting letters in the order of the original text. Here is the inputText:"Hello123, World!!!"'
+        // {
+        //   script: `
+        //         # Encoding Phase
+        //         $1 = encode(text: "Hello123, World!!!")
+
+        //         # Cleanup Phase
+        //         $2 = cleanup(text: $1)
+
+        //         # Agent Switching
+        //         $3 = switchAgent(agentName: "Decoder", currentStepNu
+        // mber: "$2", lastOutput: $2)
+
+        //         # Decoding Phase
+        //         $4 = decode(text: $2)
+
+        //         # Iterative Processing: Decode and Reduce until message length is less than 3
+        //         # Repeat the following steps until the condition is met
+        //         $5 = reduceByTwoLetters(text: $4)
+
+        //         # Summarize the result
+        //         $7 = SummarizeByLLM(text: $6)
+
+        //         # Error Handling
+        //         $8 = handleErrors(process: $5)ByLLM
+        //     `,
+        //}
       );
 
       console.log('Process completed successfully');
