@@ -1,5 +1,5 @@
 import express from 'express';
-import { createServer, get } from 'http';
+import { createServer } from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
 import { config } from 'dotenv';
 import VoiceResponse from 'twilio/lib/twiml/VoiceResponse';

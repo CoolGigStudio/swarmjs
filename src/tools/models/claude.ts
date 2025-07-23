@@ -21,10 +21,7 @@ export class ClaudeService implements AIService {
     this.config = config;
   }
 
-  async complete(
-    messages: AIMessage[],
-    systemMessage?: AIMessage
-  ): Promise<AIResponse> {
+  async complete(messages: AIMessage[]): Promise<AIResponse> {
     try {
       // Prepare messages for Claude - converting the format
       const claudeMessages = messages.map((msg) => ({

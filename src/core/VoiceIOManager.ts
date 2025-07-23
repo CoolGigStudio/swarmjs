@@ -496,7 +496,7 @@ export class VoiceIOManager {
           const message = JSON.parse(dataStr);
 
           switch (message.event) {
-            case 'start':
+            case 'start': {
               streamSid = message.start.streamSid;
 
               // Update session data with streamSid
@@ -513,6 +513,7 @@ export class VoiceIOManager {
                 sessionId
               );
               break;
+            }
 
             case 'media':
               // Forward media directly to OpenAI - this keeps the connection alive
@@ -616,7 +617,7 @@ export class VoiceIOManager {
         const message = JSON.parse(dataStr);
 
         switch (message.event) {
-          case 'start':
+          case 'start': {
             streamSid = message.start.streamSid;
 
             const sessionData = this.sessionStreams.get(sessionId);
@@ -635,6 +636,7 @@ export class VoiceIOManager {
               sessionId
             );
             break;
+          }
 
           case 'media':
             // Forward media to OpenAI

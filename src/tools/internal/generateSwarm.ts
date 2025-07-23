@@ -1,14 +1,10 @@
 import { GptSwarm } from '../../../src/core/GptSwarm';
-import { SwarmConfig, AgentConfig, ToolDefinition } from '../../../src/types';
-import { AIConfig, AIServiceType } from '../../../src/types/aiService';
-import { AIServiceFactory } from '../models/AIServices';
+import { AgentConfig, ToolDefinition } from '../../../src/types';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as readline from 'readline';
 import dotenv from 'dotenv';
-import {
-  CODE_GENERATION_PROMPT,
-  CODE_GENERATIONSWARM_GOAL_PROMPT,
-} from './prompts';
+import { CODE_GENERATIONSWARM_GOAL_PROMPT } from './prompts';
 
 dotenv.config();
 
@@ -133,7 +129,7 @@ const codeGeneratorAgent: AgentConfig = {
   allowedTools: ['readFile', 'writeFile'],
 };
 
-async function main() {
+async function main(): Promise<void> {
   const swarm = new GptSwarm();
   await swarm.init({
     agents: [codeGeneratorAgent],
@@ -146,30 +142,30 @@ async function main() {
 
   try {
     const destinationPath = await new Promise<string>((resolve) => {
-      const readline = require('readline').createInterface({
+      const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
       });
 
-      readline.question(
+      rl.question(
         'Enter destination path (default: ./examples/): ',
         (path: any) => {
-          readline.close();
+          rl.close();
           resolve(path || './examples/');
         }
       );
     });
 
     const requirements = await new Promise<string>((resolve) => {
-      const readline = require('readline').createInterface({
+      const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
       });
 
-      readline.question(
+      rl.question(
         'Enter swarm requirements (default: Default swarm implementation): ',
         (reqs: any) => {
-          readline.close();
+          rl.close();
           resolve(reqs || 'Default swarm implementation');
         }
       );

@@ -1,5 +1,5 @@
-import { AgentConfig, SwarmConfig, Flow } from "./basic";
-import * as WebSocket from "ws";
+import { AgentConfig, SwarmConfig, Flow } from './basic';
+import * as WebSocket from 'ws';
 
 export interface VoiceAgentConfig extends AgentConfig {
   voice?: string; // Voice identifier for the agent

@@ -525,7 +525,7 @@ const processPayment = async (params: any) => {
 
 const arrangePaymentPlan = async (params: any) => {
   console.log('Arranging payment plan:', params);
-  const { installments, startDate } = params;
+  // const { installments, startDate } = params;
 
   // Calculate payment dates based on the start date and number of installments
   // const paymentDates = [];
@@ -549,42 +549,6 @@ const arrangePaymentPlan = async (params: any) => {
   return 'Payment plan has been arranged';
 };
 
-const appointmentSlots = new Map([
-  ['2025-02-08', ['09:00', '11:00', '14:00']],
-  ['2025-02-09', ['10:00', '13:00', '15:00']],
-  ['2025-01-10', ['09:00', '12:00', '16:00']],
-]);
-
-const checkAvailableSlots = async (params: any) => {
-  const slots = appointmentSlots.get(params.date as string);
-  return slots ? JSON.stringify(slots) : appointmentSlots.get('2025-02-08');
-};
-
-const bookAppointment = async (arugments: any) => {
-  const { bookingInfo } = arugments;
-  console.log('Booking appointment for:', bookingInfo);
-  return 'Appointment booked successfully for ' + bookingInfo;
-};
-
-const prescriptionDB = [
-  {
-    name: 'Aspirin',
-    quantity: 100,
-    duration: '10 days',
-  },
-  {
-    name: 'Ibuprofen',
-    quantity: 200,
-    duration: '5 days',
-  },
-];
-const lookupPrescription = async (params: any) => {
-  const input = params.name.trim();
-  const prescription = prescriptionDB.find(
-    (p) => p.name.toLowerCase() === input.toLowerCase()
-  );
-  return prescription ? JSON.stringify(prescription) : 'Prescription not found';
-};
 
 server.listen(port, () => {
   console.log(`Server running on port ${port}`);

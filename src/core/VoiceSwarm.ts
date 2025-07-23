@@ -4,7 +4,6 @@ import {
   SwarmError,
   SwarmConfig,
   AgentConfig,
-  ToolDefinition,
 } from '../types/basic';
 import {
   VoiceAgentConfig,
@@ -265,8 +264,7 @@ export class VoiceSwarm extends AbstractSwarm {
    */
   protected async runSessionImpl(
     session: Flow,
-    userInput: string,
-    options?: { script?: string; continueFromPrevious?: boolean }
+    ..._args: [string, { script?: string; continueFromPrevious?: boolean }?]
   ): Promise<ToolResult> {
     // For voice sessions, we don't really "run" them with text input
     // They are event-driven through the voice channels
@@ -307,9 +305,11 @@ export class VoiceSwarm extends AbstractSwarm {
    * Override of runOnce to handle voice-specific behavior
    */
   async runOnce(
-    agentName: string,
-    goal: string,
-    options?: { script?: string; continueFromPrevious?: boolean }
+    ..._args: [
+      string,
+      string,
+      { script?: string; continueFromPrevious?: boolean }?,
+    ]
   ): Promise<ToolResult> {
     // Voice swarm doesn't support one-shot execution in the same way as text
     throw new SwarmError(
@@ -322,12 +322,14 @@ export class VoiceSwarm extends AbstractSwarm {
    * Override of runBatch to handle voice-specific behavior
    */
   async runBatch(
-    runs: Array<{ agentName: string; goal: string; script?: string }>,
-    options?: {
-      batchSize?: number;
-      concurrency?: number;
-      onProgress?: (completed: number, total: number) => void;
-    }
+    ..._args: [
+      Array<{ agentName: string; goal: string; script?: string }>,
+      {
+        batchSize?: number;
+        concurrency?: number;
+        onProgress?: (completed: number, total: number) => void;
+      }?,
+    ]
   ): Promise<Array<{ id: string; result: ToolResult; error?: Error }>> {
     // Batch processing not supported for voice swarm
     throw new SwarmError(

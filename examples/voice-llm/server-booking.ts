@@ -1,5 +1,5 @@
 import express from 'express';
-import { createServer, get } from 'http';
+import { createServer } from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
 import { config } from 'dotenv';
 import VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
@@ -326,7 +326,7 @@ const customerDB = [
   },
 ];
 
-const lookupCustomer = async (params: any) => {
+const lookupCustomer = async (params: any): Promise<string> => {
   // Extract the name from the params object
   const input = params.name.trim();
   const hasComma = input.includes(',');
@@ -360,12 +360,12 @@ const appointmentSlots = new Map([
   ['2025-01-10', ['09:00', '12:00', '16:00']],
 ]);
 
-const checkAvailableSlots = async (params: any) => {
+const checkAvailableSlots = async (params: any): Promise<string> => {
   const slots = appointmentSlots.get(params.date as string);
   return slots ? JSON.stringify(slots) : appointmentSlots.get('2025-02-08');
 };
 
-const bookAppointment = async (arugments: any) => {
+const bookAppointment = async (arugments: any): Promise<string> => {
   const { bookingInfo } = arugments;
   console.log('Booking appointment for:', bookingInfo);
   return 'Appointment booked successfully for ' + bookingInfo;
