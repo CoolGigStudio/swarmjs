@@ -54,6 +54,7 @@ export interface SwarmConfig {
   planningModel?: string;
   apiKey?: string;
   script?: string;
+  temperature?: number;
   options?: {
     maxConcurrentSessions?: number;
     toolTimeout?: number;
@@ -116,7 +117,11 @@ export class SwarmError extends Error {
       | 'AGENT_ERROR'
       | 'TOOL_ERROR'
       | 'EXECUTION_ERROR'
-      | 'CONCURRENCY_ERROR',
+      | 'CONCURRENCY_ERROR'
+      | 'RATE_LIMIT_ERROR'
+      | 'MODEL_ERROR'
+      | 'AUTHENTICATION_ERROR'
+      | 'API_ERROR',
     public details?: Record<string, unknown>
   ) {
     super(message);
