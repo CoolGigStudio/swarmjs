@@ -33,10 +33,13 @@ async function main(): Promise<void> {
       },
       handler: async (params): Promise<string> => {
         const text = params.text as string;
+        console.log(`🔧 Tool called: encode("${text}")`);
         const timestamp = Date.now();
         // Return a simple format that's easy to verify with reversed text
         const reversedText = text.split('').reverse().join('');
-        return `<encoded>${reversedText}_${timestamp}</encoded>`;
+        const result = `<encoded>${reversedText}_${timestamp}</encoded>`;
+        console.log(`📤 encode result: ${result}`);
+        return result;
       },
     },
     {
@@ -56,12 +59,15 @@ async function main(): Promise<void> {
       },
       handler: async (params): Promise<string> => {
         const text = params.text as string;
+        console.log(`🔧 Tool called: cleanup("${text}")`);
         // First extract content from encoded tags
         const match = text.match(/<encoded>(.*?)_\d+<\/encoded>/);
         if (!match) return text;
         // Then remove non-alphabetic characters
         const content = match[1];
-        return `<cleaned>${content.replace(/[^a-zA-Z]/g, '')}</cleaned>`;
+        const result = `<cleaned>${content.replace(/[^a-zA-Z]/g, '')}</cleaned>`;
+        console.log(`📤 cleanup result: ${result}`);
+        return result;
       },
     },
     {
@@ -81,9 +87,12 @@ async function main(): Promise<void> {
       },
       handler: async (params): Promise<string> => {
         const text = params.text as string;
+        console.log(`🔧 Tool called: decode("${text}")`);
         const match = text.match(/<cleaned>(.*?)<\/cleaned>/);
         const extractedText = match ? match[1] : text;
-        return extractedText.split('').reverse().join('');
+        const result = extractedText.split('').reverse().join('');
+        console.log(`📤 decode result: ${result}`);
+        return result;
       },
     },
     {
@@ -103,12 +112,15 @@ async function main(): Promise<void> {
       },
       handler: async (params): Promise<string> => {
         const text = params.text as string;
+        console.log(`🔧 Tool called: reduceByTwoLetters("${text}")`);
         if (text.length < 3) {
+          console.log(`📤 reduceByTwoLetters result: ${text} (no reduction - length < 3)`);
           return text;
         }
         // Reduce two letters at a time
         let reducedText = text;
         reducedText = reducedText.slice(0, -2);
+        console.log(`📤 reduceByTwoLetters result: ${reducedText}`);
         return reducedText;
       },
     },
@@ -215,21 +227,16 @@ async function main(): Promise<void> {
         'Process the following inputText: "Testing456, RunOnce!!!"',
         {
           script: `
-              # Text Encoding and Cleanup
+              # Text Encoding and Cleanup (Encoder Agent)
               $1 = encode(text: "Testing456, RunOnce!!!")
               $2 = cleanup(text: $1)
 
               # Agent Switching
               $3 = switchAgent(agentName: "Decoder")
 
-              # Text Decoding
+              # Text Decoding and Reduction (Decoder Agent)
               $4 = decode(text: $2)
-
-              # Summarization by LLM
-              $5 = summarize_ByLLM(text: $4)
-
-              # Error Handling
-              $6 = handleErrors_ByLLM(step: $5)
+              $5 = reduceByTwoLetters(text: $4)
           `,
         }
       );

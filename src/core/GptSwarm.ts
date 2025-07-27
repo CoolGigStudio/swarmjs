@@ -52,13 +52,13 @@ export class GptSwarm implements Swarm {
 
       this.config.id = crypto.randomUUID();
 
-      // Add built-in tools
-      config.tools = this.addBuiltinTools(config.tools || []);
-      
       const agents = new Map(
         (config.agents || []).map((agent) => [agent.name, agent])
       );
 
+      // Add built-in tools after agents are set up
+      config.tools = this.addBuiltinTools(config.tools || [], agents.size);
+      
       const toolsMap = new Map(
         config.tools.map((tool) => [tool.function.name, tool])
       );
@@ -76,11 +76,11 @@ export class GptSwarm implements Swarm {
   /**
    * Add built-in tools including switchAgent (only when multiple agents exist)
    */
-  private addBuiltinTools(tools: ToolDefinition[]): ToolDefinition[] {
+  private addBuiltinTools(tools: ToolDefinition[], agentCount: number): ToolDefinition[] {
     const result = [...tools];
     
     // Only add switchAgent if there are multiple agents
-    if (this.swarmData && this.swarmData.agents.size > 1) {
+    if (agentCount > 1) {
       result.push({
         type: 'function' as const,
         function: {
@@ -177,68 +177,21 @@ Important instructions:
         script = await this.generateScript(goal);
       }
 
-      const agent = this.swarmData.agents.get(agentName)!;
-      const tools = this.buildResponsesAPITools(
-        [...this.swarmData.tools.values()],
-        this.swarmData.responsesConfig?.builtInTools
-      );
-
-      // Build system message for the agent
-      const systemMessage = this.buildAgentSystemMessage(agent);
-      
-      // Prepare the input message
-      let message = goal;
-      if (script) {
-        message = `${goal}\n\nExecute this script:\n${script}`;
-      }
-
       // Initialize conversation history for agent loop
       const conversationHistory: string[] = [];
       
-      // Check if Responses API is available in the SDK (future-ready)
+      // Use iterative agent loop with Responses API
       const clientAny = this.client as any;
-      if (clientAny.responses && typeof clientAny.responses.create === 'function') {
-        try {
-          // Use iterative agent loop with Responses API
-          return await this.runResponsesAPIAgentLoop(
-            systemMessage,
-            message,
-            tools,
-            conversationHistory
-          );
-        } catch (responsesError) {
-          console.log('Responses API failed, falling back to Chat Completions:', responsesError);
-        }
-      } else {
-        console.log('Responses API not available in SDK, using Chat Completions API');
+      if (!clientAny.responses || typeof clientAny.responses.create !== 'function') {
+        throw new SwarmError('Responses API not available in current OpenAI SDK version', 'API_ERROR');
       }
       
-      // Fallback to Chat Completions API for compatibility
-      const response = await this.client.chat.completions.create({
-        model: this.config.model || DEFAULT_ASSISTANT_MODEL,
-        messages: [
-          { role: 'system', content: systemMessage },
-          { role: 'user', content: message },
-        ],
-        tools: tools.length > 0 ? tools : undefined,
-        temperature: this.config.temperature || 0.7,
-        max_tokens: 4000,
-      });
-      
-      const result = response.choices[0]?.message?.content || '';
-      
-      // Handle tool calls if present
-      if (response.choices[0]?.message?.tool_calls) {
-        return await this.handleToolCallsInResponse(
-          response.choices[0].message.tool_calls,
-          systemMessage,
-          message,
-          tools,
-          agentName
-        );
-      }
-
-      return result;
+      return await this.runResponsesAPIAgentLoop(
+        agentName,
+        goal,
+        script,
+        conversationHistory
+      );
     } catch (error) {
       throw this.handleAPIError(error);
     }
@@ -248,25 +201,52 @@ Important instructions:
    * Iterative agent loop for Responses API (like OpenAI Agents SDK)
    */
   private async runResponsesAPIAgentLoop(
-    systemMessage: string,
-    initialMessage: string,
-    tools: any[],
+    initialAgent: string,
+    goal: string,
+    script: string,
     conversationHistory: string[]
   ): Promise<string> {
-    const clientAny = this.client as any;
-    let turn = 0;
-    let currentInput = `${systemMessage}\n\nUser: ${initialMessage}`;
-    
-    // Add conversation history if available
-    if (conversationHistory.length > 0) {
-      currentInput += '\n\nConversation History:\n' + conversationHistory.join('\n');
+    if (!this.swarmData) {
+      throw new SwarmError('Swarm not initialized', 'INITIALIZATION_ERROR');
     }
 
-    console.log('Starting agent loop with Responses API...');
+    const clientAny = this.client as any;
+    let currentAgent = initialAgent;
+    let turn = 0;
+    
+    console.log(`🔄 Starting multi-agent workflow with ${currentAgent} agent...`);
     
     while (turn < this.max_turns) {
-      console.log(`\n--- Agent Loop Turn ${turn + 1} ---`);
-      console.log('Making API call with tools:', JSON.stringify(tools.map(t => t.name || t.type), null, 2));
+      
+      // Get current agent configuration
+      const agent = this.swarmData.agents.get(currentAgent);
+      if (!agent) {
+        throw new SwarmError(`Agent ${currentAgent} not found`, 'AGENT_ERROR');
+      }
+
+      // Build tools available to current agent (including switchAgent if multiple agents)
+      const tools = this.buildResponsesAPITools(
+        [...this.swarmData.tools.values()],
+        this.swarmData.responsesConfig?.builtInTools
+      );
+
+      // Build system message for current agent
+      const systemMessage = this.buildAgentSystemMessage(agent);
+      
+      // Prepare input message with script and conversation history
+      let message = goal;
+      if (script) {
+        message = `${goal}\n\nExecute this script:\n${script}`;
+      }
+      
+      let currentInput = `${systemMessage}\n\nUser: ${message}`;
+      
+      // Add conversation history if available
+      if (conversationHistory.length > 0) {
+        currentInput += '\n\nExecution Progress:\n' + conversationHistory.join('\n');
+        currentInput += '\n\nBased on the script provided and the execution progress above, determine what step should be executed next. If all steps are complete, provide the final result without calling more tools.';
+      }
+      
       
       const response = await clientAny.responses.create({
         model: this.config.model || DEFAULT_ASSISTANT_MODEL,
@@ -276,8 +256,6 @@ Important instructions:
         max_output_tokens: 4000,
       });
       
-      console.log('Responses API call successful');
-      console.log('Response status:', response.status);
       
       // Check if we have function calls to process
       if (response.output && Array.isArray(response.output) && response.output.length > 0) {
@@ -286,56 +264,78 @@ Important instructions:
         );
         
         if (functionCalls.length > 0) {
-          console.log(`Processing ${functionCalls.length} function calls...`);
           
           // Execute all function calls and collect results
-          const toolResults: string[] = [];
+          let agentSwitched = false;
           for (const functionCall of functionCalls) {
-            console.log('Processing function call:', JSON.stringify(functionCall, null, 2));
             
             try {
               const args = JSON.parse(functionCall.arguments);
-              const result = await this.executeResponsesAPITool(functionCall.name, args);
-              toolResults.push(`${functionCall.name}: ${result}`);
               
-              // Add to conversation history
-              conversationHistory.push(`Tool Call: ${functionCall.name}(${JSON.stringify(args)})`);
-              conversationHistory.push(`Tool Result: ${result}`);
+              // Handle switchAgent specially
+              if (functionCall.name === 'switchAgent') {
+                const targetAgent = args.agentName;
+                console.log(`\n🔄 AGENT SWITCH: ${currentAgent} → ${targetAgent}`);
+                console.log(`   Previous agent: ${currentAgent}`);
+                console.log(`   New agent: ${targetAgent}`);
+                
+                if (!this.swarmData.agents.has(targetAgent)) {
+                  throw new SwarmError(`Target agent ${targetAgent} not found`, 'AGENT_ERROR');
+                }
+                
+                // Add switch to conversation history
+                conversationHistory.push(`Agent Switch: ${currentAgent} → ${targetAgent}`);
+                
+                // Switch to new agent
+                currentAgent = targetAgent;
+                agentSwitched = true;
+                console.log(`✅ Agent switch completed - now using ${currentAgent} agent\n`);
+                break; // Continue with new agent in next iteration
+              } else {
+                // Handle regular tools
+                const result = await this.executeResponsesAPITool(functionCall.name, args, currentAgent);
+                
+                // Add to conversation history
+                conversationHistory.push(`Tool Call: ${functionCall.name}(${JSON.stringify(args)})`);
+                conversationHistory.push(`Tool Result: ${result}`);
+              }
               
             } catch (error) {
               console.error(`Error executing function ${functionCall.name}:`, error);
               const errorMsg = `${functionCall.name}: Error - ${error}`;
-              toolResults.push(errorMsg);
               conversationHistory.push(`Tool Error: ${errorMsg}`);
             }
           }
           
-          // Check if we have web search calls (handled differently)
+          // If agent switched, continue with new agent
+          if (agentSwitched) {
+            turn++;
+            continue;
+          }
+          
+          // Handle web search calls (built-in tools)
           const webSearchCalls = response.output.filter(
             (item: any) => item.type === 'web_search_call' && item.status === 'completed'
           );
           
           if (webSearchCalls.length > 0) {
-            console.log(`Processing ${webSearchCalls.length} web search calls...`);
             for (const webCall of webSearchCalls) {
               const query = webCall.action?.query || 'query not specified';
-              console.log(`Web search executed: ${query}`);
               conversationHistory.push(`Web Search: ${query}`);
-              // Web search results are embedded in the response content
             }
           }
           
-          // Prepare input for next turn with better DAG state tracking
+          // Check if we've completed all DAG steps
+          const completedSteps = this.analyzeDAGCompletion(conversationHistory, message);
           
-          // Check if we've completed all DAG steps by analyzing the conversation history
-          const completedSteps = this.analyzeDAGCompletion(conversationHistory, initialMessage);
+          console.log(`📋 DAG Progress: ${Array.from(completedSteps.completedSteps).length}/${completedSteps.requiredSteps.length} steps completed`);
+          console.log(`   Required: [${completedSteps.requiredSteps.join(', ')}]`);
+          console.log(`   Completed: [${Array.from(completedSteps.completedSteps).join(', ')}]`);
           
           if (completedSteps.isComplete) {
-            console.log('DAG execution detected as complete, returning final result');
+            console.log('✅ Multi-agent workflow completed successfully');
             return completedSteps.finalResult;
           }
-          
-          currentInput = `${systemMessage}\n\nUser: ${initialMessage}\n\nExecution Progress:\n${conversationHistory.join('\n')}\n\nBased on the script provided and the execution progress above, determine what step should be executed next. If all steps are complete, provide the final result without calling more tools.`;
           
           turn++;
           continue;
@@ -385,12 +385,11 @@ Important instructions:
       
       // Return final output if available
       if (finalOutput) {
-        console.log('Agent loop completed with final output');
+        console.log('✅ Multi-agent workflow completed');
         return finalOutput;
       }
       
       // No function calls and no final output - something went wrong
-      console.log('No function calls or final output detected, ending loop');
       break;
     }
     
@@ -407,15 +406,16 @@ Important instructions:
   /**
    * Analyze conversation history to determine if DAG execution is complete
    */
-  private analyzeDAGCompletion(conversationHistory: string[], initialMessage: string): { isComplete: boolean; finalResult: string } {
+  private analyzeDAGCompletion(conversationHistory: string[], initialMessage: string): { isComplete: boolean; finalResult: string; completedSteps: Set<string>; requiredSteps: string[] } {
     // Extract the script from the initial message
-    const scriptMatch = initialMessage.match(/Execute this script:\s*([\s\S]*?)(?:\n\n|$)/);
+    const scriptMatch = initialMessage.match(/Execute this script:\s*([\s\S]*?)$/);
     if (!scriptMatch) {
-      return { isComplete: false, finalResult: '' };
+      console.log('❌ No script found in initial message');
+      return { isComplete: false, finalResult: '', completedSteps: new Set(), requiredSteps: [] };
     }
     
     const script = scriptMatch[1].trim();
-    const scriptLines = script.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('//'));
+    const scriptLines = script.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('//') && !line.startsWith('#'));
     
     // Parse DAG steps from script
     const dagSteps: { [key: string]: string } = {};
@@ -430,23 +430,39 @@ Important instructions:
       }
     }
     
+    
     // Check which steps have been completed based on conversation history
     const completedSteps = new Set<string>();
     const stepResults: { [key: string]: string } = {};
     
-    for (let i = 0; i < conversationHistory.length; i += 2) {
-      const toolCall = conversationHistory[i];
-      const toolResult = conversationHistory[i + 1];
+    for (let i = 0; i < conversationHistory.length; i++) {
+      const historyEntry = conversationHistory[i];
       
-      if (toolCall && toolResult && toolCall.startsWith('Tool Call:') && toolResult.startsWith('Tool Result:')) {
-        const toolName = toolCall.match(/Tool Call: (\w+)/)?.[1];
-        const result = toolResult.replace('Tool Result: ', '');
-        
-        // Match tool calls to DAG steps
+      // Handle regular tool calls
+      if (historyEntry.startsWith('Tool Call:')) {
+        const toolResult = conversationHistory[i + 1];
+        if (toolResult && toolResult.startsWith('Tool Result:')) {
+          const toolName = historyEntry.match(/Tool Call: (\w+)/)?.[1];
+          const result = toolResult.replace('Tool Result: ', '');
+          
+          // Match tool calls to DAG steps
+          for (const [step, operation] of Object.entries(dagSteps)) {
+            if (operation.includes(toolName || '') && !completedSteps.has(step)) {
+              completedSteps.add(step);
+              stepResults[step] = result;
+              break;
+            }
+          }
+        }
+      }
+      
+      // Handle agent switches
+      if (historyEntry.startsWith('Agent Switch:')) {
+        // Match agent switches to DAG steps with switchAgent
         for (const [step, operation] of Object.entries(dagSteps)) {
-          if (operation.includes(toolName || '') && !completedSteps.has(step)) {
+          if (operation.includes('switchAgent') && !completedSteps.has(step)) {
             completedSteps.add(step);
-            stepResults[step] = result;
+            stepResults[step] = historyEntry;
             break;
           }
         }
@@ -457,15 +473,16 @@ Important instructions:
     const requiredSteps = stepOrder.filter(step => !dagSteps[step].includes('finish()'));
     const allStepsComplete = requiredSteps.every(step => completedSteps.has(step));
     
+    
     if (allStepsComplete) {
       // Return the result of the last non-finish step
       const lastStep = requiredSteps[requiredSteps.length - 1];
       const finalResult = stepResults[lastStep] || conversationHistory[conversationHistory.length - 1]?.replace('Tool Result: ', '') || '';
       
-      return { isComplete: true, finalResult };
+      return { isComplete: true, finalResult, completedSteps, requiredSteps };
     }
     
-    return { isComplete: false, finalResult: '' };
+    return { isComplete: false, finalResult: '', completedSteps, requiredSteps };
   }
 
   /**
@@ -530,7 +547,7 @@ Important instructions:
   /**
    * Execute a tool for Responses API format
    */
-  private async executeResponsesAPITool(toolName: string, args: any): Promise<string> {
+  private async executeResponsesAPITool(toolName: string, args: any, currentAgent?: string): Promise<string> {
     if (!this.swarmData) {
       throw new SwarmError('Swarm not initialized', 'INITIALIZATION_ERROR');
     }
@@ -545,6 +562,17 @@ Important instructions:
     const tool = this.swarmData.tools.get(toolName);
     if (!tool) {
       throw new SwarmError(`Tool ${toolName} not found`, 'TOOL_ERROR');
+    }
+
+    // Verify tool access for agent if agent is specified
+    if (currentAgent) {
+      const agent = this.swarmData.agents.get(currentAgent);
+      if (agent && !agent.allowedTools.includes(toolName) && toolName !== 'switchAgent') {
+        throw new SwarmError(
+          `Tool ${toolName} not allowed for agent ${currentAgent}`,
+          'TOOL_ERROR'
+        );
+      }
     }
 
     try {
