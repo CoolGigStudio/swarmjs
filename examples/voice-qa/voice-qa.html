@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Voice Q&A - SwarmJS</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            text-align: center;
+            opacity: 0.8;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        
+        .status.disconnected {
+            background: rgba(255, 107, 107, 0.2);
+            border: 2px solid #ff6b6b;
+        }
+        
+        .status.connecting {
+            background: rgba(255, 193, 7, 0.2);
+            border: 2px solid #ffc107;
+        }
+        
+        .status.connected {
+            background: rgba(40, 167, 69, 0.2);
+            border: 2px solid #28a745;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        button {
+            padding: 15px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(45deg, #ff6b6b, #ff8e8e);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .examples {
+            margin: 30px 0;
+        }
+        
+        .examples h3 {
+            margin-bottom: 15px;
+            color: #4ecdc4;
+        }
+        
+        .examples ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .examples li {
+            background: rgba(255, 255, 255, 0.1);
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 10px;
+            border-left: 4px solid #4ecdc4;
+        }
+        
+        .log {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin-top: 20px;
+        }
+        
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .timestamp {
+            color: #4ecdc4;
+            font-size: 12px;
+        }
+        
+        .error {
+            color: #ff6b6b;
+        }
+        
+        .success {
+            color: #28a745;
+        }
+        
+        .info {
+            color: #17a2b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Voice Q&A</h1>
+        <p class="subtitle">Local Voice Assistant powered by OpenAI Realtime API</p>
+        
+        <div id="status" class="status disconnected">
+            🔴 Disconnected - Click "Start Voice Session" to begin
+        </div>
+        
+        <div class="controls">
+            <button id="startBtn" class="btn-primary">Start Voice Session</button>
+            <button id="stopBtn" class="btn-danger" disabled>Stop Session</button>
+            <button id="clearLogBtn" class="btn-secondary">Clear Log</button>
+        </div>
+        
+        <div class="examples">
+            <h3>💬 Try These Voice Commands:</h3>
+            <ul>
+                <li>"What time is it?"</li>
+                <li>"What's the weather in San Francisco?"</li>
+                <li>"Calculate 15 times 7"</li>
+                <li>"Hello, how are you today?"</li>
+            </ul>
+        </div>
+        
+        <div class="log" id="log">
+            <div class="log-entry">
+                <span class="timestamp">[System]</span> Ready to start voice session...
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        class VoiceQAApp {
+            constructor() {
+                this.status = document.getElementById('status');
+                this.startBtn = document.getElementById('startBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.clearLogBtn = document.getElementById('clearLogBtn');
+                this.log = document.getElementById('log');
+                
+                this.voiceSwarm = null;
+                this.session = null;
+                this.isConnected = false;
+                
+                this.setupEventListeners();
+            }
+            
+            setupEventListeners() {
+                this.startBtn.addEventListener('click', () => this.startVoiceSession());
+                this.stopBtn.addEventListener('click', () => this.stopVoiceSession());
+                this.clearLogBtn.addEventListener('click', () => this.clearLog());
+            }
+            
+            async startVoiceSession() {
+                try {
+                    this.updateStatus('connecting', '🟡 Connecting...');
+                    this.logMessage('Initializing voice session...', 'info');
+                    
+                    // Note: This is a browser demo - in a real implementation,
+                    // you would need to bundle the LocalVoiceSwarm for the browser
+                    // or use a server-side WebSocket proxy
+                    
+                    this.logMessage('⚠️ Demo Mode: This is a UI mockup', 'info');
+                    this.logMessage('Real implementation requires server-side setup', 'info');
+                    
+                    // Simulate connection
+                    setTimeout(() => {
+                        this.updateStatus('connected', '🟢 Voice session active - Speak now!');
+                        this.logMessage('✅ Voice session started successfully', 'success');
+                        this.logMessage('🎤 Listening for audio input...', 'info');
+                        this.isConnected = true;
+                        this.startBtn.disabled = true;
+                        this.stopBtn.disabled = false;
+                        
+                        // Simulate some voice interaction events
+                        this.simulateVoiceEvents();
+                    }, 2000);
+                    
+                } catch (error) {
+                    this.logMessage(`❌ Error starting session: ${error.message}`, 'error');
+                    this.updateStatus('disconnected', '🔴 Connection failed');
+                }
+            }
+            
+            async stopVoiceSession() {
+                try {
+                    this.logMessage('🛑 Stopping voice session...', 'info');
+                    
+                    this.isConnected = false;
+                    this.updateStatus('disconnected', '🔴 Disconnected');
+                    this.logMessage('✅ Voice session ended', 'success');
+                    
+                    this.startBtn.disabled = false;
+                    this.stopBtn.disabled = true;
+                    
+                } catch (error) {
+                    this.logMessage(`❌ Error stopping session: ${error.message}`, 'error');
+                }
+            }
+            
+            simulateVoiceEvents() {
+                if (!this.isConnected) return;
+                
+                // Simulate various voice interaction events
+                const events = [
+                    { delay: 3000, message: '🎤 Audio input detected', type: 'info' },
+                    { delay: 4000, message: '🔧 Tool called: getCurrentTime', type: 'info' },
+                    { delay: 5000, message: '🔊 Playing assistant response', type: 'success' },
+                    { delay: 8000, message: '🎤 Ready for next question', type: 'info' },
+                ];
+                
+                events.forEach(event => {
+                    setTimeout(() => {
+                        if (this.isConnected) {
+                            this.logMessage(event.message, event.type);
+                        }
+                    }, event.delay);
+                });
+                
+                // Continue simulation
+                setTimeout(() => this.simulateVoiceEvents(), 15000);
+            }
+            
+            updateStatus(state, message) {
+                this.status.className = `status ${state}`;
+                this.status.textContent = message;
+            }
+            
+            logMessage(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${type}`;
+                entry.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+                
+                this.log.appendChild(entry);
+                this.log.scrollTop = this.log.scrollHeight;
+            }
+            
+            clearLog() {
+                this.log.innerHTML = '<div class="log-entry"><span class="timestamp">[System]</span> Log cleared</div>';
+            }
+        }
+        
+        // Initialize the app
+        new VoiceQAApp();
+    </script>
+</body>
+</html>
