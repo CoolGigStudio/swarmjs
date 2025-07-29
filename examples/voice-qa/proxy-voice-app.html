@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real Voice Q&A with Proxy - SwarmJS</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            text-align: center;
+            opacity: 0.8;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        
+        .status.disconnected {
+            background: rgba(255, 107, 107, 0.2);
+            border: 2px solid #ff6b6b;
+        }
+        
+        .status.connecting {
+            background: rgba(255, 193, 7, 0.2);
+            border: 2px solid #ffc107;
+        }
+        
+        .status.connected {
+            background: rgba(40, 167, 69, 0.2);
+            border: 2px solid #28a745;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        button {
+            padding: 15px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(45deg, #ff6b6b, #ff8e8e);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .config {
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+        
+        .config input, .config select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+        }
+        
+        .config label {
+            display: block;
+            margin: 10px 0 5px 0;
+            font-weight: bold;
+        }
+        
+        .examples {
+            margin: 30px 0;
+        }
+        
+        .examples h3 {
+            margin-bottom: 15px;
+            color: #4ecdc4;
+        }
+        
+        .examples ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .examples li {
+            background: rgba(255, 255, 255, 0.1);
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 10px;
+            border-left: 4px solid #4ecdc4;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .examples li:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .log {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin-top: 20px;
+        }
+        
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .timestamp {
+            color: #4ecdc4;
+            font-size: 12px;
+        }
+        
+        .error {
+            color: #ff6b6b;
+        }
+        
+        .success {
+            color: #28a745;
+        }
+        
+        .info {
+            color: #17a2b8;
+        }
+        
+        .warning {
+            color: #ffc107;
+        }
+        
+        .test-btn {
+            margin-left: 10px;
+            padding: 5px 15px;
+            font-size: 12px;
+        }
+        
+        .model-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .model-display {
+            font-weight: bold;
+            color: #4ecdc4;
+            font-family: 'Courier New', monospace;
+            margin: 0 15px;
+        }
+        
+        .api-status {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Real Voice Q&A</h1>
+        <p class="subtitle">LocalVoiceSwarm with WebSocket Proxy</p>
+        
+        <div id="status" class="status disconnected">
+            🔴 Disconnected - Click start to begin session
+        </div>
+        
+        <div class="config">
+            <div class="model-info">
+                <label>🤖 Current Model:</label>
+                <span id="currentModel" class="model-display">Loading...</span>
+                <span id="apiStatus" class="api-status">🔧 Checking API...</span>
+            </div>
+            
+            <label for="voice">Voice:</label>
+            <select id="voice">
+                <option value="alloy">Alloy (Default - Balanced)</option>
+                <option value="ash">Ash - Raspy</option>
+                <option value="ballad">Ballad - Deep</option>
+                <option value="coral">Coral - Warm</option>
+                <option value="echo">Echo - Bright Optimist</option>
+                <option value="sage">Sage - Thoughtful</option>
+                <option value="shimmer">Shimmer - Whispery</option>
+                <option value="verse">Verse - Pleasant</option>
+            </select>
+            <button id="changeVoiceBtn" class="btn-secondary test-btn" disabled>Change Voice</button>
+            
+            <h4 style="margin: 20px 0 10px 0; color: #4ecdc4;">🎛️ Interruption Settings</h4>
+            
+            <label for="confirmationDelay">Interruption Delay (ms):</label>
+            <input type="range" id="confirmationDelay" min="100" max="1000" value="500" step="50">
+            <span id="confirmationDelayValue">500ms</span>
+            
+            <label for="fadeOutDuration">Fade Out Duration (ms):</label>
+            <input type="range" id="fadeOutDuration" min="50" max="500" value="200" step="25">
+            <span id="fadeOutDurationValue">200ms</span>
+            
+            <label for="graceVolumeLevel">Grace Period Volume:</label>
+            <input type="range" id="graceVolumeLevel" min="0" max="1" value="1.0" step="0.1">
+            <span id="graceVolumeLevelValue">100%</span>
+        </div>
+        
+        <div class="controls">
+            <button id="startBtn" class="btn-primary">Start Voice Session</button>
+            <button id="stopBtn" class="btn-danger" disabled>Stop Session</button>
+            <button id="clearLogBtn" class="btn-secondary">Clear Log</button>
+        </div>
+        
+        <div class="examples">
+            <h3>💬 Try These Voice Commands:</h3>
+            
+            <h4 style="color: #4ecdc4; margin: 20px 0 10px 0;">🔧 Tool Commands (Now Working!):</h4>
+            <ul>
+                <li onclick="app.simulateCommand('What time is it?')">
+                    "What time is it?" - Uses getCurrentTime tool
+                </li>
+                <li onclick="app.simulateCommand('What is the weather in San Francisco?')">
+                    "What is the weather in San Francisco?" - Uses getWeather tool
+                </li>
+                <li onclick="app.simulateCommand('What is the weather in New York?')">
+                    "What is the weather in New York?" - Uses getWeather tool
+                </li>
+                <li onclick="app.simulateCommand('What is the current time and date?')">
+                    "What is the current time and date?" - Uses getCurrentTime tool
+                </li>
+            </ul>
+            
+            <h4 style="color: #4ecdc4; margin: 20px 0 10px 0;">💬 General Commands:</h4>
+            <ul>
+                <li onclick="app.simulateCommand('Hello, how are you today?')">
+                    "Hello, how are you today?"
+                </li>
+                <li onclick="app.simulateCommand('Tell me a joke')">
+                    "Tell me a joke"
+                </li>
+                <li onclick="app.simulateCommand('What can you help me with?')">
+                    "What can you help me with?"
+                </li>
+                <li onclick="app.simulateCommand('How are you feeling?')">
+                    "How are you feeling?"
+                </li>
+            </ul>
+            <p style="opacity: 0.8; font-size: 0.9em; margin-top: 15px;">
+                ✅ <strong>Tools Now Working:</strong> Using Option 3 (response.create with tools)<br>
+                🔧 <strong>Available Tools:</strong> getCurrentTime, getWeather (mock data)<br>
+                🎤 <strong>Voice Selection:</strong> Choose from 8 different OpenAI voices!<br>
+                💬 <strong>Model:</strong> Configured via server environment
+            </p>
+        </div>
+        
+        <div class="log" id="log">
+            <div class="log-entry">
+                <span class="timestamp">[System]</span> Ready to connect to OpenAI Realtime API via proxy...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ProxyVoiceQA {
+            constructor() {
+                this.status = document.getElementById('status');
+                this.startBtn = document.getElementById('startBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.clearLogBtn = document.getElementById('clearLogBtn');
+                this.changeVoiceBtn = document.getElementById('changeVoiceBtn');
+                this.log = document.getElementById('log');
+                this.voiceSelect = document.getElementById('voice');
+                this.currentModelSpan = document.getElementById('currentModel');
+                this.apiStatusSpan = document.getElementById('apiStatus');
+                
+                // Interruption settings controls
+                this.confirmationDelaySlider = document.getElementById('confirmationDelay');
+                this.confirmationDelayValue = document.getElementById('confirmationDelayValue');
+                this.fadeOutDurationSlider = document.getElementById('fadeOutDuration');
+                this.fadeOutDurationValue = document.getElementById('fadeOutDurationValue');
+                this.graceVolumeLevelSlider = document.getElementById('graceVolumeLevel');
+                this.graceVolumeLevelValue = document.getElementById('graceVolumeLevelValue');
+                
+                this.proxyWs = null;
+                this.audioContext = null;
+                this.audioStream = null;
+                this.audioProcessor = null;
+                this.audioSource = null;
+                this.audioGain = null;
+                this.isConnected = false;
+                this.lastAudioSend = 0;
+                this.lastSpeechTime = 0;
+                this.speechDetected = false;
+                this.silenceThreshold = 0.001; // Audio amplitude threshold for silence detection
+                this.silenceDuration = 1000; // 1 second of silence to trigger response
+                this.lastAudioActivity = 0;
+                
+                // Audio streaming for seamless playback
+                this.audioQueue = [];
+                this.nextPlayTime = 0;
+                this.audioContextStartTime = 0;
+                
+                // Smart interruption system with configurable settings
+                this.currentResponseId = null;
+                this.activeAudioSources = new Map(); // responseId -> [{source, gainNode}]
+                this.interruptionTimer = null;
+                this.interruptionState = 'none'; // 'none', 'pending', 'confirmed'
+                this.awaitingNewResponse = false;
+                
+                // Configurable interruption settings
+                this.interruptionSettings = {
+                    confirmationDelay: 500,    // ms to wait before confirming interruption
+                    fadeOutDuration: 200,      // ms for fade-out when interrupting
+                    graceVolumeLevel: 1.0      // volume during grace period (1.0 = full, 0.0 = silent)
+                };
+                
+                this.setupEventListeners();
+                this.checkBrowserSupport();
+            }
+            
+            setupEventListeners() {
+                this.startBtn.addEventListener('click', () => this.startVoiceSession());
+                this.stopBtn.addEventListener('click', () => this.stopVoiceSession());
+                this.clearLogBtn.addEventListener('click', () => this.clearLog());
+                this.changeVoiceBtn.addEventListener('click', () => this.changeVoice());
+                
+                // Setup interruption settings sliders
+                this.confirmationDelaySlider.addEventListener('input', (e) => {
+                    this.interruptionSettings.confirmationDelay = parseInt(e.target.value);
+                    this.confirmationDelayValue.textContent = `${e.target.value}ms`;
+                });
+                
+                this.fadeOutDurationSlider.addEventListener('input', (e) => {
+                    this.interruptionSettings.fadeOutDuration = parseInt(e.target.value);
+                    this.fadeOutDurationValue.textContent = `${e.target.value}ms`;
+                });
+                
+                this.graceVolumeLevelSlider.addEventListener('input', (e) => {
+                    this.interruptionSettings.graceVolumeLevel = parseFloat(e.target.value);
+                    this.graceVolumeLevelValue.textContent = `${Math.round(e.target.value * 100)}%`;
+                });
+            }
+            
+            checkBrowserSupport() {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    this.logMessage('❌ getUserMedia not supported in this browser', 'error');
+                    this.startBtn.disabled = true;
+                    return;
+                }
+                
+                if (!MediaRecorder) {
+                    this.logMessage('❌ MediaRecorder not supported in this browser', 'error');
+                    this.startBtn.disabled = true;
+                    return;
+                }
+                
+                if (!AudioContext && !webkitAudioContext) {
+                    this.logMessage('❌ AudioContext not supported in this browser', 'error');
+                    this.startBtn.disabled = true;
+                    return;
+                }
+                
+                this.logMessage('✅ Browser supports all required APIs', 'success');
+            }
+            
+            async startVoiceSession() {
+                
+                try {
+                    this.updateStatus('connecting', '🟡 Connecting to proxy server...');
+                    this.logMessage('🔄 Starting real voice session...', 'info');
+                    
+                    // Step 1: Get microphone access
+                    this.logMessage('🎤 Requesting microphone access...', 'info');
+                    this.audioStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            sampleRate: 16000,  // Fixed: OpenAI expects 16kHz, not 24kHz!
+                            channelCount: 1,
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                        }
+                    });
+                    this.logMessage('✅ Microphone access granted', 'success');
+                    
+                    // Step 2: Initialize AudioContext
+                    this.audioContext = new (AudioContext || webkitAudioContext)();
+                    this.logMessage('✅ Audio context initialized', 'success');
+                    
+                    // Step 3: Connect to proxy server
+                    await this.connectToProxy();
+                    
+                    // Step 4: Start recording
+                    this.startRecording();
+                    
+                    this.updateStatus('connected', '🟢 Connected! Speak now...');
+                    this.isConnected = true;
+                    this.startBtn.disabled = true;
+                    this.stopBtn.disabled = false;
+                    this.changeVoiceBtn.disabled = false;
+                    
+                } catch (error) {
+                    this.logMessage(`❌ Failed to start voice session: ${error.message}`, 'error');
+                    this.updateStatus('disconnected', '🔴 Connection failed');
+                    this.cleanup();
+                }
+            }
+            
+            async connectToProxy() {
+                return new Promise((resolve, reject) => {
+                    const wsUrl = `ws://${window.location.host}/voice-proxy`;
+                    this.proxyWs = new WebSocket(wsUrl);
+                    
+                    this.proxyWs.onopen = () => {
+                        this.logMessage('🔗 Connected to proxy server', 'success');
+                        
+                        // Send setup message to proxy
+                        this.proxyWs.send(JSON.stringify({
+                            type: 'proxy_setup'
+                        }));
+                    };
+                    
+                    this.proxyWs.onmessage = (event) => {
+                        const message = JSON.parse(event.data);
+                        
+                        if (message.type === 'proxy_connected') {
+                            this.logMessage('✅ Proxy connected to OpenAI', 'success');
+                            this.logMessage('🎯 Using Option 3: instructions + tools with response.create', 'info');
+                            this.logMessage('🔧 Tools enabled: getCurrentTime, getWeather', 'success');
+                            this.logMessage('📋 Custom instructions and tools sent per response', 'info');
+                            resolve();
+                        } else {
+                            this.handleProxyMessage(message);
+                        }
+                    };
+                    
+                    this.proxyWs.onerror = (error) => {
+                        this.logMessage('❌ Proxy connection error', 'error');
+                        reject(new Error('Proxy connection failed'));
+                    };
+                    
+                    this.proxyWs.onclose = () => {
+                        this.logMessage('🔗 Proxy connection closed', 'info');
+                        if (this.isConnected) {
+                            this.stopVoiceSession();
+                        }
+                    };
+                    
+                    // Timeout
+                    setTimeout(() => {
+                        if (this.proxyWs.readyState !== WebSocket.OPEN) {
+                            reject(new Error('Proxy connection timeout'));
+                        }
+                    }, 10000);
+                });
+            }
+            
+            sendAudioSessionUpdate() {
+                // Use minimal session update that matches the default session to avoid server errors
+                const sessionConfig = {
+                    type: 'session.update',
+                    session: {
+                        // Only update the essential fields, keeping defaults for everything else
+                        instructions: 'You are a helpful voice assistant. Always respond with speech/audio, not text. Keep responses conversational and concise. You have access to tools for getting the current time and weather information.',
+                        voice: this.voiceSelect.value || 'alloy',
+                        // Keep the existing modalities from default session: ["audio", "text"]
+                        modalities: ['audio', 'text'],
+                        // Keep the existing temperature from default session
+                        temperature: 0.8,
+                        // Add tool definitions
+                        tools: this.getToolDefinitions(),
+                        tool_choice: 'auto'
+                        // Don't change turn_detection or audio formats to avoid conflicts
+                    }
+                };
+                
+                this.logMessage('🎵 Configuring session with tools for audio responses', 'info');
+                this.proxyWs.send(JSON.stringify(sessionConfig));
+            }
+            
+            getToolDefinitions() {
+                return [
+                    {
+                        type: 'function',
+                        function: {
+                            name: 'getCurrentTime',
+                            description: 'Get the current time and date',
+                            parameters: {
+                                type: 'object',
+                                properties: {},
+                                required: []
+                            }
+                        }
+                    },
+                    {
+                        type: 'function', 
+                        function: {
+                            name: 'getWeather',
+                            description: 'Get current weather information for a city',
+                            parameters: {
+                                type: 'object',
+                                properties: {
+                                    city: {
+                                        type: 'string',
+                                        description: 'The city name to get weather for'
+                                    }
+                                },
+                                required: ['city']
+                            }
+                        }
+                    }
+                ];
+            }
+            
+            startRecording() {
+                this.logMessage('🎤 Setting up PCM16 audio processing...', 'info');
+                
+                // Use Web Audio API to process raw PCM16 data
+                try {
+                    const source = this.audioContext.createMediaStreamSource(this.audioStream);
+                    
+                    // Use createScriptProcessor with smaller buffer for less data
+                    const processor = this.audioContext.createScriptProcessor(1024, 1, 1);
+                    
+                    processor.onaudioprocess = (event) => {
+                        if (this.proxyWs && this.proxyWs.readyState === WebSocket.OPEN) {
+                            // Throttle audio sending to reduce server load
+                            const now = Date.now();
+                            if (now - this.lastAudioSend < 50) { // Max 20 times per second
+                                return;
+                            }
+                            this.lastAudioSend = now;
+                            
+                            const inputBuffer = event.inputBuffer;
+                            const inputData = inputBuffer.getChannelData(0);
+                            
+                            // Check if there's actually audio data (not silence)
+                            let hasAudio = false;
+                            let maxAmplitude = 0;
+                            for (let i = 0; i < inputData.length; i++) {
+                                const amplitude = Math.abs(inputData[i]);
+                                if (amplitude > maxAmplitude) maxAmplitude = amplitude;
+                                // Use higher threshold to filter out background noise that confuses server VAD
+                                if (amplitude > 0.01) { // Raised from 0.001 to 0.01 to reduce noise
+                                    hasAudio = true;
+                                }
+                            }
+                            
+                            // Debug audio levels every 1 second
+                            if (!this.lastAudioLevelLog) this.lastAudioLevelLog = 0;
+                            if (now - this.lastAudioLevelLog > 1000) {
+                                this.logMessage(`🎤 Audio level: ${(maxAmplitude * 100).toFixed(2)}% (threshold: 1.0%)`, 'info');
+                                this.lastAudioLevelLog = now;
+                            }
+                            
+                            // Send audio even if it seems like silence - let server VAD decide
+                            // Comment out the skip to let OpenAI's server VAD handle silence detection
+                            // if (!hasAudio) {
+                            //     return; // Skip sending silence
+                            // }
+                            
+                            // Convert float32 to int16 (PCM16) at 16kHz sample rate
+                            const pcm16 = new Int16Array(inputData.length);
+                            for (let i = 0; i < inputData.length; i++) {
+                                const s = Math.max(-1, Math.min(1, inputData[i]));
+                                pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                            }
+                            
+                            // Send raw PCM16 binary data directly (not JSON wrapped!)
+                            // The proxy will detect binary data and wrap it properly
+                            const bytes = new Uint8Array(pcm16.buffer);
+                            this.proxyWs.send(bytes);
+                            
+                            // Debug logging every 50 audio packets
+                            if (!this.audioPacketCount) this.audioPacketCount = 0;
+                            this.audioPacketCount++;
+                            if (this.audioPacketCount % 50 === 0) {
+                                this.logMessage(`🎵 Sent ${this.audioPacketCount} audio packets`, 'info');
+                            }
+                        }
+                    };
+                    
+                    // Connect audio processing chain - processor must be connected to destination
+                    source.connect(processor);
+                    
+                    // Create a gain node set to 0 to avoid audio feedback
+                    const gainNode = this.audioContext.createGain();
+                    gainNode.gain.value = 0; // Mute the output
+                    processor.connect(gainNode);
+                    gainNode.connect(this.audioContext.destination);
+                    
+                    this.audioProcessor = processor;
+                    this.audioSource = source;
+                    this.audioGain = gainNode;
+                    
+                    this.logMessage('🎤 PCM16 recording started (16kHz)', 'success');
+                    
+                } catch (error) {
+                    this.logMessage(`❌ Audio processing error: ${error.message}`, 'error');
+                    throw error;
+                }
+            }
+            
+            handleProxyMessage(message) {
+                console.log('Proxy message:', message);
+                
+                switch (message.type) {
+                    case 'session.updated':
+                        this.logMessage('✅ OpenAI session configured for audio responses', 'success');
+                        break;
+                        
+                    case 'response.audio.delta':
+                        this.logMessage(`🎵 Audio chunk received: ${message.delta ? message.delta.length : 'no delta'} chars`, 'success');
+                        if (message.delta) {
+                            this.handleAudioDelta(message);
+                        }
+                        break;
+                        
+                    case 'response.text.delta':
+                        this.logMessage(`📝 response.text.delta (should be audio instead): ${message.delta || 'no delta'}`, 'warning');
+                        break;
+                        
+                    case 'response.output_item.done':
+                        this.logMessage('📝 Response item completed', 'info');
+                        if (message.item && message.item.type === 'function_call') {
+                            this.logMessage(`🔧 Function call detected: ${message.item.name}`, 'info');
+                            this.handleToolCall(message.item);
+                        }
+                        break;
+                        
+                    case 'input_audio_buffer.speech_started':
+                        this.logMessage('🎤 Speech detected by server VAD', 'success');
+                        this.speechDetected = true;
+                        this.lastSpeechTime = Date.now();
+                        this.handleSpeechStarted();
+                        break;
+                        
+                    case 'input_audio_buffer.speech_stopped':
+                        this.logMessage('🔇 Speech ended by server VAD - OpenAI generating response...', 'success');
+                        this.speechDetected = false;
+                        this.handleSpeechStopped();
+                        break;
+                        
+                    case 'response.created':
+                        this.logMessage('🤖 OpenAI is generating response...', 'info');
+                        this.handleResponseCreated(message);
+                        break;
+                        
+                    case 'response.done':
+                        this.logMessage('✅ Response generation complete', 'success');
+                        break;
+                        
+                    case 'error':
+                        this.logMessage(`❌ Error: ${message.error.message}`, 'error');
+                        break;
+                        
+                    case 'openai_disconnected':
+                        this.logMessage('🔗 OpenAI connection lost', 'warning');
+                        break;
+                        
+                    default:
+                        if (message.type && message.type.includes('audio')) {
+                            this.logMessage(`🔍 AUDIO EVENT: ${message.type}`, 'info');
+                        } else if (message.type && message.type.includes('text')) {
+                            this.logMessage(`📝 TEXT EVENT (should be audio): ${message.type}`, 'warning');
+                        } else {
+                            this.logMessage(`📋 ${message.type}`, 'info');
+                        }
+                        break;
+                }
+            }
+            
+            async playAudioResponse(audioData) {
+                try {
+                    this.logMessage(`🎵 Audio chunk received: ${audioData.length} chars`, 'info');
+                    
+                    // Decode base64 to binary data
+                    const binaryString = atob(audioData);
+                    const audioBuffer = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        audioBuffer[i] = binaryString.charCodeAt(i);
+                    }
+                    
+                    // OpenAI sends PCM16 data - create AudioBuffer manually
+                    const pcmData = new Int16Array(audioBuffer.buffer);
+                    const audioCtxBuffer = this.audioContext.createBuffer(1, pcmData.length, 16000); // 16kHz mono
+                    const channelData = audioCtxBuffer.getChannelData(0);
+                    
+                    // Convert PCM16 to float32 for Web Audio API
+                    for (let i = 0; i < pcmData.length; i++) {
+                        channelData[i] = pcmData[i] / 32768.0; // Convert to [-1, 1] range
+                    }
+                    
+                    // Play audio with seamless timing
+                    this.playAudioChunkSeamlessly(audioCtxBuffer);
+                    
+                } catch (error) {
+                    this.logMessage(`❌ Error processing audio: ${error.message}`, 'error');
+                    console.error('Audio error details:', error);
+                }
+            }
+            
+            handleSpeechStarted() {
+                // Start interruption timer for smart interruption detection
+                if (this.interruptionTimer) {
+                    clearTimeout(this.interruptionTimer);
+                }
+                
+                this.interruptionState = 'pending';
+                this.logMessage(`⏱️ Interruption timer started (${this.interruptionSettings.confirmationDelay}ms)`, 'info');
+                
+                this.interruptionTimer = setTimeout(() => {
+                    if (this.speechDetected && this.interruptionState === 'pending') {
+                        // User has been speaking for the configured delay - confirm interruption
+                        this.interruptionState = 'confirmed';
+                        this.logMessage('🛑 Confirming interruption - fading out current audio', 'warning');
+                        this.fadeOutCurrentResponse();
+                        this.awaitingNewResponse = true;
+                    }
+                }, this.interruptionSettings.confirmationDelay);
+            }
+            
+            handleSpeechStopped() {
+                // Cancel interruption timer if user stops speaking quickly
+                if (this.interruptionTimer && this.interruptionState === 'pending') {
+                    clearTimeout(this.interruptionTimer);
+                    this.interruptionTimer = null;
+                    this.interruptionState = 'none';
+                    this.logMessage('✅ Speech stopped quickly - no interruption', 'info');
+                }
+            }
+            
+            handleResponseCreated(message) {
+                const newResponseId = message.response?.id;
+                if (!newResponseId) return;
+                
+                this.logMessage(`🆔 New response: ${newResponseId}`, 'info');
+                
+                // If this is a different response, stop the old one immediately
+                if (this.currentResponseId && this.currentResponseId !== newResponseId) {
+                    this.logMessage(`🔄 Switching from ${this.currentResponseId} to ${newResponseId}`, 'warning');
+                    this.stopResponse(this.currentResponseId);
+                }
+                
+                this.currentResponseId = newResponseId;
+                this.interruptionState = 'none';
+                this.awaitingNewResponse = false;
+                
+                // Reset audio timing for new response
+                this.nextPlayTime = 0;
+                this.audioContextStartTime = 0;
+            }
+            
+            handleAudioDelta(message) {
+                const responseId = message.response_id;
+                
+                // Only play audio if this is the current response
+                if (responseId === this.currentResponseId) {
+                    this.playAudioResponse(message.delta, responseId);
+                } else {
+                    this.logMessage(`🚫 Ignoring audio from old response: ${responseId}`, 'warning');
+                }
+            }
+            
+            fadeOutCurrentResponse() {
+                if (!this.currentResponseId) {
+                    this.logMessage('❌ No current response ID to fade out', 'warning');
+                    return;
+                }
+                
+                const sources = this.activeAudioSources.get(this.currentResponseId);
+                this.logMessage(`🔍 Fade out check: Response ${this.currentResponseId} has ${sources ? sources.length : 0} active sources`, 'info');
+                
+                if (!sources || sources.length === 0) {
+                    this.logMessage(`❌ No active sources found for response ${this.currentResponseId}`, 'warning');
+                    return;
+                }
+                
+                const fadeTime = this.interruptionSettings.fadeOutDuration / 1000; // Convert to seconds
+                const now = this.audioContext.currentTime;
+                
+                sources.forEach((sourceInfo, index) => {
+                    if (sourceInfo.gainNode) {
+                        sourceInfo.gainNode.gain.setValueAtTime(sourceInfo.gainNode.gain.value, now);
+                        sourceInfo.gainNode.gain.linearRampToValueAtTime(0, now + fadeTime);
+                        
+                        // Stop the source after fade completes
+                        setTimeout(() => {
+                            try {
+                                sourceInfo.source.stop();
+                                this.logMessage(`⏹️ Stopped audio source ${index + 1}/${sources.length}`, 'info');
+                            } catch (e) {
+                                // Source might already be stopped
+                                this.logMessage(`⚠️ Audio source ${index + 1} already stopped`, 'warning');
+                            }
+                        }, fadeTime * 1000 + 50); // Small extra delay
+                    }
+                });
+                
+                this.logMessage(`🔉 Fading out response ${this.currentResponseId} (${sources.length} sources) over ${fadeTime * 1000}ms`, 'info');
+            }
+            
+            stopResponse(responseId) {
+                const sources = this.activeAudioSources.get(responseId);
+                this.logMessage(`🔍 Stop response check: Response ${responseId} has ${sources ? sources.length : 0} active sources`, 'info');
+                
+                if (!sources || sources.length === 0) {
+                    this.logMessage(`❌ No active sources found for response ${responseId}`, 'warning');
+                    return;
+                }
+                
+                sources.forEach((sourceInfo, index) => {
+                    try {
+                        sourceInfo.source.stop();
+                        this.logMessage(`⏹️ Stopped audio source ${index + 1}/${sources.length} for response ${responseId}`, 'info');
+                    } catch (e) {
+                        // Source might already be stopped
+                        this.logMessage(`⚠️ Audio source ${index + 1} for response ${responseId} already stopped`, 'warning');
+                    }
+                });
+                
+                this.activeAudioSources.delete(responseId);
+                this.logMessage(`⏹️ Stopped response ${responseId} (${sources.length} sources)`, 'info');
+            }
+            
+            playAudioResponse(audioData, responseId) {
+                try {
+                    this.logMessage(`🎵 Processing audio for response: ${responseId}`, 'info');
+                    
+                    // Decode base64 to binary data
+                    const binaryString = atob(audioData);
+                    const audioBuffer = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        audioBuffer[i] = binaryString.charCodeAt(i);
+                    }
+                    
+                    // OpenAI sends PCM16 data - create AudioBuffer manually
+                    const pcmData = new Int16Array(audioBuffer.buffer);
+                    const audioCtxBuffer = this.audioContext.createBuffer(1, pcmData.length, 16000); // 16kHz mono
+                    const channelData = audioCtxBuffer.getChannelData(0);
+                    
+                    // Convert PCM16 to float32 for Web Audio API
+                    for (let i = 0; i < pcmData.length; i++) {
+                        channelData[i] = pcmData[i] / 32768.0; // Convert to [-1, 1] range
+                    }
+                    
+                    // Play audio with smart interruption support
+                    this.playAudioChunkSeamlessly(audioCtxBuffer, responseId);
+                    
+                } catch (error) {
+                    this.logMessage(`❌ Error processing audio: ${error.message}`, 'error');
+                    console.error('Audio error details:', error);
+                }
+            }
+            
+            playAudioChunkSeamlessly(audioBuffer, responseId) {
+                const now = this.audioContext.currentTime;
+                
+                // Initialize timing on first chunk
+                if (this.nextPlayTime === 0) {
+                    this.nextPlayTime = now + 0.1; // Small buffer to avoid glitches
+                    this.audioContextStartTime = now;
+                    this.logMessage('🎵 Starting seamless audio stream', 'info');
+                }
+                
+                // Create audio source with gain node for volume control
+                const source = this.audioContext.createBufferSource();
+                const gainNode = this.audioContext.createGain();
+                
+                source.buffer = audioBuffer;
+                source.playbackRate.value = 1.25; // 25% faster for natural speed
+                
+                // Set volume based on interruption state
+                const volume = this.interruptionState === 'pending' ? 
+                    this.interruptionSettings.graceVolumeLevel : 1.0;
+                gainNode.gain.value = volume;
+                
+                // Connect audio chain
+                source.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                // Track this source for interruption management
+                if (!this.activeAudioSources.has(responseId)) {
+                    this.activeAudioSources.set(responseId, []);
+                    this.logMessage(`🆕 Created new source array for response ${responseId}`, 'info');
+                }
+                const sourceInfo = { source, gainNode };
+                this.activeAudioSources.get(responseId).push(sourceInfo);
+                
+                const currentCount = this.activeAudioSources.get(responseId).length;
+                this.logMessage(`📊 Response ${responseId} now has ${currentCount} active sources`, 'info');
+                
+                // Schedule to play at the exact right time
+                source.start(this.nextPlayTime);
+                
+                // Update next play time accounting for the faster playback rate
+                const actualDuration = audioBuffer.duration / source.playbackRate.value;
+                this.nextPlayTime += actualDuration;
+                
+                const queuedFor = this.nextPlayTime - now;
+                this.logMessage(`🔊 Scheduled audio [${responseId}]: ${actualDuration.toFixed(3)}s at ${volume * 100}% volume`, 'success');
+                
+                // Clean up when audio ends
+                source.onended = () => {
+                    // Remove from active sources
+                    const sources = this.activeAudioSources.get(responseId);
+                    if (sources) {
+                        const index = sources.indexOf(sourceInfo);
+                        if (index > -1) {
+                            sources.splice(index, 1);
+                            this.logMessage(`🗑️ Removed completed source from response ${responseId} (${sources.length} remaining)`, 'info');
+                        }
+                        
+                        // Clean up empty response entries
+                        if (sources.length === 0) {
+                            this.activeAudioSources.delete(responseId);
+                            this.logMessage(`🧹 Cleaned up empty source array for response ${responseId}`, 'info');
+                        }
+                    }
+                    
+                    // Reset timing if this was the last chunk and we're done
+                    if (this.activeAudioSources.size === 0) {
+                        const timeSinceLastSchedule = this.audioContext.currentTime - (this.nextPlayTime - actualDuration);
+                        if (timeSinceLastSchedule > 1.0) {
+                            this.nextPlayTime = 0;
+                            this.logMessage('🔊 Audio stream completed', 'success');
+                        }
+                    }
+                };
+            }
+            
+            handleToolCall(item) {
+                this.logMessage(`🔧 Tool called: ${item.name}`, 'info');
+                
+                let result;
+                const args = JSON.parse(item.arguments || '{}');
+                
+                switch (item.name) {
+                    case 'getCurrentTime':
+                        const now = new Date();
+                        result = {
+                            currentTime: now.toLocaleTimeString(),
+                            currentDate: now.toLocaleDateString(),
+                            timestamp: now.toISOString(),
+                            message: `Current time is ${now.toLocaleTimeString()} on ${now.toLocaleDateString()}`
+                        };
+                        break;
+                        
+                    case 'getWeather':
+                        const city = args.city || 'Unknown';
+                        
+                        if (city.toLowerCase().includes('san francisco')) {
+                            // For San Francisco, return current system time as a special indicator
+                            const now = new Date();
+                            result = {
+                                city: city,
+                                temperature: 'Current system time',
+                                condition: now.toLocaleTimeString(),
+                                humidity: now.toLocaleDateString(),
+                                message: `Weather tool working! For ${city}, the current system time is ${now.toLocaleTimeString()} on ${now.toLocaleDateString()}`,
+                            };
+                        } else {
+                            // For all other cities, return clear "no information" message
+                            result = {
+                                city: city,
+                                temperature: 'N/A',
+                                condition: 'No data available',
+                                humidity: 'N/A',
+                                message: `I don't have weather information for ${city}. I only have data for San Francisco.`,
+                            };
+                        }
+                        break;
+                        
+                    default:
+                        result = { error: 'Unknown tool', message: 'Tool not implemented' };
+                        break;
+                }
+                
+                // Send tool result back via proxy
+                const toolResponse = {
+                    type: 'conversation.item.create',
+                    item: {
+                        type: 'function_call_output',
+                        call_id: item.call_id,
+                        output: JSON.stringify(result),
+                    },
+                };
+                
+                this.proxyWs.send(JSON.stringify(toolResponse));
+                this.proxyWs.send(JSON.stringify({ type: 'response.create' }));
+                
+                this.logMessage(`✅ Tool result: ${result.message || JSON.stringify(result)}`, 'success');
+            }
+            
+            simulateCommand(command) {
+                if (!this.isConnected) {
+                    this.logMessage('⚠️ Not connected - start a voice session first', 'warning');
+                    return;
+                }
+                
+                this.logMessage(`🗣️ Simulating: "${command}"`, 'info');
+                // In a real implementation, this would convert text to audio
+                // For now, just log the command
+            }
+            
+            stopVoiceSession() {
+                this.logMessage('🛑 Stopping voice session...', 'info');
+                this.cleanup();
+                this.updateStatus('disconnected', '🔴 Disconnected');
+                this.isConnected = false;
+                this.startBtn.disabled = false;
+                this.stopBtn.disabled = true;
+                this.changeVoiceBtn.disabled = true;
+                this.logMessage('✅ Voice session ended', 'success');
+            }
+            
+            cleanup() {
+                // Clear interruption timer
+                if (this.interruptionTimer) {
+                    clearTimeout(this.interruptionTimer);
+                    this.interruptionTimer = null;
+                }
+                
+                // Stop all active audio sources
+                this.activeAudioSources.forEach((sources, responseId) => {
+                    this.stopResponse(responseId);
+                });
+                this.activeAudioSources.clear();
+                
+                // Reset state
+                this.currentResponseId = null;
+                this.interruptionState = 'none';
+                this.awaitingNewResponse = false;
+                this.nextPlayTime = 0;
+                this.audioContextStartTime = 0;
+                
+                // Clean up Web Audio API nodes
+                if (this.audioProcessor) {
+                    this.audioProcessor.disconnect();
+                    this.audioProcessor = null;
+                }
+                
+                if (this.audioSource) {
+                    this.audioSource.disconnect();
+                    this.audioSource = null;
+                }
+                
+                if (this.audioGain) {
+                    this.audioGain.disconnect();
+                    this.audioGain = null;
+                }
+                
+                if (this.audioStream) {
+                    this.audioStream.getTracks().forEach(track => track.stop());
+                }
+                
+                if (this.proxyWs) {
+                    this.proxyWs.close();
+                }
+                
+                this.proxyWs = null;
+                this.audioStream = null;
+            }
+            
+            updateStatus(state, message) {
+                this.status.className = `status ${state}`;
+                this.status.textContent = message;
+            }
+            
+            logMessage(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${type}`;
+                entry.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+                
+                this.log.appendChild(entry);
+                this.log.scrollTop = this.log.scrollHeight;
+            }
+            
+            changeVoice() {
+                if (!this.isConnected || !this.proxyWs || this.proxyWs.readyState !== WebSocket.OPEN) {
+                    this.logMessage('❌ Cannot change voice - not connected', 'error');
+                    return;
+                }
+                
+                const selectedVoice = this.voiceSelect.value;
+                this.logMessage(`🎵 Changing voice to: ${selectedVoice}`, 'info');
+                
+                // Send voice change update to OpenAI
+                const voiceUpdate = {
+                    type: 'session.update',
+                    session: {
+                        voice: selectedVoice
+                    }
+                };
+                
+                this.proxyWs.send(JSON.stringify(voiceUpdate));
+                this.logMessage(`✅ Voice change request sent: ${selectedVoice}`, 'success');
+            }
+            
+            async loadConfig() {
+                try {
+                    const response = await fetch('/api/config');
+                    const config = await response.json();
+                    
+                    this.currentModelSpan.textContent = config.model;
+                    
+                    if (config.hasApiKey) {
+                        this.apiStatusSpan.textContent = '✅ API Key Configured';
+                        this.apiStatusSpan.style.color = '#4ecdc4';
+                    } else {
+                        this.apiStatusSpan.textContent = '❌ API Key Missing';
+                        this.apiStatusSpan.style.color = '#ff6b6b';
+                        this.logMessage('❌ OpenAI API key not configured in server environment', 'error');
+                    }
+                    
+                    this.logMessage(`✅ Configuration loaded - Model: ${config.model}`, 'success');
+                } catch (error) {
+                    this.currentModelSpan.textContent = 'Error loading config';
+                    this.apiStatusSpan.textContent = '❌ Config Error';
+                    this.logMessage(`❌ Failed to load configuration: ${error.message}`, 'error');
+                }
+            }
+            
+            clearLog() {
+                this.log.innerHTML = '<div class="log-entry"><span class="timestamp">[System]</span> Log cleared</div>';
+            }
+        }
+        
+        // Initialize the app and make it globally accessible
+        const app = new ProxyVoiceQA();
+        
+        // Load configuration when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            app.loadConfig();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Voice Test - SwarmJS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f0f2f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        
+        .status.disconnected { background: #ffe6e6; color: #d00; }
+        .status.connecting { background: #fff3cd; color: #856404; }
+        .status.connected { background: #d4edda; color: #155724; }
+        
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .btn-primary { background: #007bff; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .config {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        
+        .config input, .config select {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 0;
+        }
+        
+        .error { color: #dc3545; }
+        .success { color: #28a745; }
+        .info { color: #17a2b8; }
+        .warning { color: #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Simple Voice Test</h1>
+        
+        <div id="status" class="status disconnected">
+            🔴 Disconnected - Enter API key to test
+        </div>
+        
+        <div class="config">
+            <label for="apiKey">OpenAI API Key:</label>
+            <input type="password" id="apiKey" placeholder="Enter your OpenAI API key">
+            <button id="testBtn" class="btn-secondary">Test Connection</button>
+        </div>
+        
+        <div style="text-align: center;">
+            <button id="startBtn" class="btn-primary">Start Simple Test</button>
+            <button id="stopBtn" class="btn-danger" disabled>Stop Test</button>
+            <button id="clearBtn" class="btn-secondary">Clear Log</button>
+        </div>
+        
+        <div class="log" id="log">
+            <div class="log-entry">[System] Simple voice connection test ready...</div>
+        </div>
+    </div>
+
+    <script>
+        class SimpleVoiceTest {
+            constructor() {
+                this.status = document.getElementById('status');
+                this.startBtn = document.getElementById('startBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.clearBtn = document.getElementById('clearBtn');
+                this.testBtn = document.getElementById('testBtn');
+                this.log = document.getElementById('log');
+                this.apiKeyInput = document.getElementById('apiKey');
+                
+                this.proxyWs = null;
+                this.isConnected = false;
+                
+                this.setupEventListeners();
+            }
+            
+            setupEventListeners() {
+                this.startBtn.addEventListener('click', () => this.startTest());
+                this.stopBtn.addEventListener('click', () => this.stopTest());
+                this.clearBtn.addEventListener('click', () => this.clearLog());
+                this.testBtn.addEventListener('click', () => this.testConnection());
+            }
+            
+            async testConnection() {
+                const apiKey = this.apiKeyInput.value.trim();
+                if (!apiKey) {
+                    this.logMessage('❌ Please enter API key', 'error');
+                    return;
+                }
+                
+                this.testBtn.disabled = true;
+                this.logMessage('🔄 Testing connection to proxy server...', 'info');
+                
+                try {
+                    const response = await fetch('/api/test-openai', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ apiKey }),
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.logMessage(`✅ API test successful: ${result.totalModels} models`, 'success');
+                        this.logMessage(`🎯 Realtime models: ${result.realtimeModels.join(', ')}`, 'success');
+                    } else {
+                        this.logMessage(`❌ API test failed: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    this.logMessage(`❌ Connection test error: ${error.message}`, 'error');
+                } finally {
+                    this.testBtn.disabled = false;
+                }
+            }
+            
+            async startTest() {
+                const apiKey = this.apiKeyInput.value.trim();
+                if (!apiKey) {
+                    this.logMessage('❌ Please enter API key', 'error');
+                    return;
+                }
+                
+                try {
+                    this.updateStatus('connecting', '🟡 Connecting to proxy...');
+                    this.logMessage('🔄 Starting simple voice test...', 'info');
+                    
+                    await this.connectToProxy(apiKey);
+                    
+                    this.updateStatus('connected', '🟢 Connected! Test running...');
+                    this.isConnected = true;
+                    this.startBtn.disabled = true;
+                    this.stopBtn.disabled = false;
+                    
+                    // Don't send configuration here anymore - wait for session.created
+                    // Configuration will be sent when we receive session.created message
+                    
+                } catch (error) {
+                    this.logMessage(`❌ Test failed: ${error.message}`, 'error');
+                    this.updateStatus('disconnected', '🔴 Connection failed');
+                    this.cleanup();
+                }
+            }
+            
+            async connectToProxy(apiKey) {
+                return new Promise((resolve, reject) => {
+                    const wsUrl = `ws://${window.location.host}/voice-proxy`;
+                    this.proxyWs = new WebSocket(wsUrl);
+                    
+                    this.proxyWs.onopen = () => {
+                        this.logMessage('🔗 Connected to proxy server', 'success');
+                        
+                        // Send setup message
+                        this.proxyWs.send(JSON.stringify({
+                            type: 'proxy_setup',
+                            apiKey: apiKey
+                        }));
+                    };
+                    
+                    this.proxyWs.onmessage = (event) => {
+                        console.log('🔍 Client received raw event:', event);
+                        console.log('🔍 Event data:', event.data);
+                        
+                        try {
+                            console.log('🔍 Raw event data:', event.data);
+                            console.log('🔍 Data type:', typeof event.data);
+                            console.log('🔍 Data length:', event.data.length);
+                            
+                            const message = JSON.parse(event.data);
+                            console.log('🔍 Parsed message:', message);
+                            this.logMessage(`📥 Received: ${message.type}`, 'info');
+                            
+                            if (message.type === 'session.created') {
+                                this.logMessage('🎯 CRITICAL: Got session.created! Now ready for configuration...', 'success');
+                                console.log('🎯 CRITICAL: session.created received by client:', message);
+                                // Wait for proxy_connected confirmation, then send config
+                            } else if (message.type === 'proxy_connected') {
+                                this.logMessage('✅ Proxy fully connected! Session ready to use.', 'success');
+                                this.logMessage('🎯 Using default OpenAI session (no config needed)', 'info');
+                                resolve();
+                                // Don't send session.update - default session works perfectly!
+                            } else if (message.type === 'error') {
+                                this.logMessage(`❌ Proxy error: ${message.error.message}`, 'error');
+                                reject(new Error(message.error.message));
+                            } else if (message.type === 'openai_disconnected') {
+                                this.logMessage(`🔗 OpenAI disconnected - Code: ${message.code}, Reason: ${message.reason}`, 'warning');
+                            } else {
+                                // Log all other message types
+                                this.logMessage(`📝 ${message.type}: ${JSON.stringify(message).substring(0, 100)}...`, 'info');
+                            }
+                        } catch (parseError) {
+                            console.log('❌ Failed to parse message:', parseError);
+                            console.log('❌ Raw data:', event.data);
+                            console.log('❌ Data substring (first 200 chars):', event.data.substring(0, 200));
+                            console.log('❌ Data substring (last 200 chars):', event.data.substring(Math.max(0, event.data.length - 200)));
+                            
+                            // Try to identify if this is multiple JSON objects
+                            const parts = event.data.split('}{');
+                            if (parts.length > 1) {
+                                console.log('🔍 Detected multiple JSON objects concatenated:', parts.length);
+                                parts.forEach((part, index) => {
+                                    if (index > 0) part = '{' + part;
+                                    if (index < parts.length - 1) part = part + '}';
+                                    console.log(`🔍 Part ${index + 1}:`, part);
+                                });
+                            }
+                            
+                            this.logMessage(`❌ Parse error: ${parseError.message}`, 'error');
+                        }
+                    };
+                    
+                    this.proxyWs.onerror = (error) => {
+                        this.logMessage(`❌ WebSocket error: ${error}`, 'error');
+                        reject(new Error('WebSocket connection failed'));
+                    };
+                    
+                    this.proxyWs.onclose = () => {
+                        this.logMessage('🔗 Proxy connection closed', 'info');
+                    };
+                    
+                    // Timeout
+                    setTimeout(() => {
+                        if (this.proxyWs.readyState !== WebSocket.OPEN) {
+                            reject(new Error('Connection timeout'));
+                        }
+                    }, 10000);
+                });
+            }
+            
+            sendTestConfiguration() {
+                const testConfig = {
+                    type: 'session.update',
+                    session: {
+                        model: 'gpt-4o-realtime-preview-2024-12-17',
+                        voice: 'alloy',
+                        instructions: 'You are a helpful test assistant. Respond briefly to test the connection.',
+                        input_audio_format: 'pcm16',
+                        output_audio_format: 'pcm16',
+                        modalities: ['text', 'audio'],
+                        temperature: 0.8,
+                    }
+                };
+                
+                this.proxyWs.send(JSON.stringify(testConfig));
+                this.logMessage('🔧 Sent test configuration to OpenAI', 'info');
+            }
+            
+            stopTest() {
+                this.logMessage('🛑 Stopping test...', 'info');
+                this.cleanup();
+                this.updateStatus('disconnected', '🔴 Disconnected');
+                this.isConnected = false;
+                this.startBtn.disabled = false;
+                this.stopBtn.disabled = true;
+            }
+            
+            cleanup() {
+                if (this.proxyWs) {
+                    this.proxyWs.close();
+                }
+                this.proxyWs = null;
+            }
+            
+            updateStatus(state, message) {
+                this.status.className = `status ${state}`;
+                this.status.textContent = message;
+            }
+            
+            logMessage(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${type}`;
+                entry.textContent = `[${timestamp}] ${message}`;
+                
+                this.log.appendChild(entry);
+                this.log.scrollTop = this.log.scrollHeight;
+            }
+            
+            clearLog() {
+                this.log.innerHTML = '<div class="log-entry">[System] Log cleared</div>';
+            }
+        }
+        
+        // Initialize the test
+        new SimpleVoiceTest();
+    </script>
+</body>
+</html>
